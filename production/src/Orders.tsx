@@ -297,7 +297,9 @@ export function Orders({
           <Empty>
             {archived
               ? "Chưa có lệnh đã xóa phù hợp."
-              : "Chưa có lệnh phù hợp. Tạo lệnh từ kế hoạch hoặc thêm SKU thủ công."}
+              : can(actor.role, "order")
+                ? "Chưa có lệnh phù hợp. Tạo lệnh từ kế hoạch hoặc thêm SKU thủ công."
+                : "Chưa có lệnh phù hợp. Vai trò hiện tại không được tạo lệnh; cần Production Planner hoặc Administrator."}
           </Empty>
         )}
       </section>

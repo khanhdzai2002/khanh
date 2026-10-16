@@ -146,3 +146,7 @@ Bản mới tách rõ hai lý do:
 - `account_disabled`: Administrator kiểm tra trạng thái user trong COMS-FLOW và chỉ mở lại khi được phép. Backend không tự mở khóa hoặc nâng quyền.
 
 Có thể xác nhận reason trong Deploy Logs bằng `Lark access denied`. Fingerprint trong log chỉ phục vụ so sánh, **không phải tenant key để nhập cấu hình**. Không cần đổi Secret hoặc callback khi lỗi đã ở bước tenant check.
+
+## Đã đăng nhập nhưng không có nút tạo/sửa
+
+Nhìn vai trò ở góc trên: Viewer chỉ xem. Thực hiện [đối chiếu V9 và khởi tạo Administrator đầu tiên](V9_BUTTON_AUDIT.md), sau đó cấp vai trò nhân viên tại Phân quyền. Không thay role bằng SQL trực tiếp, không bật DEV_AUTH trên Railway và không tự cấp Admin cho người đầu tiên đăng nhập.

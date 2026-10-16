@@ -29,6 +29,7 @@ import {
   totals,
   sizes,
 } from "../shared/domain";
+import { initialAdminStatus, bootstrapInitialAdmin } from "./initial-admin";
 import {
   previewSales,
   confirmSales,
@@ -124,6 +125,21 @@ export function makeApp() {
     }),
   );
   app.get("/api/dashboard", async (_req, res) => res.json(await dashboard()));
+  app.get("/api/account", async (req, res) => {
+    res.json(await initialAdminStatus(pool, req.actor!.id));
+  });
+  app.post("/api/admin/bootstrap", async (req, res) => {
+    z.object({}).strict().parse(req.body);
+    const changed = await transaction((db) =>
+      bootstrapInitialAdmin(db, req.actor!.id),
+    );
+    if (!changed)
+      throw new AppError(
+        403,
+        "Không được khởi tạo quản trị viên: cần đúng tài khoản được cấu hình và hệ thống chưa có Administrator hoặc chưa từng dùng bước khởi tạo này.",
+      );
+    res.json({ ok: true });
+  });
   app.get("/api/lark/status", permission("admin"), (_req, res) =>
     res.json({
       ...larkStatus(),

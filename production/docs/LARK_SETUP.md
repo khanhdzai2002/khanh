@@ -30,6 +30,9 @@ Tên menu/quyền có thể khác theo phiên bản và tenant; lấy tên scope
 
 ## Đăng nhập và cấp Administrator đầu tiên
 
+Với hệ thống chưa có Administrator, ưu tiên [hướng dẫn chỉ định tài khoản và kích hoạt trong giao diện](V9_BUTTON_AUDIT.md). Chủ hosting đặt LARK_INITIAL_ADMIN_OPEN_ID bằng Open ID đúng người; người đó xác nhận trong phiên của mình. Không tự nâng quyền mọi người đăng nhập. CLI bên dưới vẫn dùng được cho người vận hành được ủy quyền.
+
+
 Nhấn icon app → giao diện đăng nhập → Lark authorize → callback backend xác minh state gắn với session một lần, hạn 5 phút, và tenant. State được tiêu thụ nguyên tử trong PostgreSQL để chặn callback đồng thời; OAuth dùng PKCE S256 và client_id/response_type=code. Backend dùng timeout 15 giây, không retry đổi authorization code và không theo redirect khi gửi credential. Backend lấy user info, tạo người dùng Viewer, đổi session ID và lưu session PostgreSQL. Access token không được trả về frontend hoặc lưu vào localStorage; chỉ dùng tại backend để đọc danh tính.
 
 Người quản trị đầu tiên đăng nhập bằng Lark thật trước. Người vận hành máy chủ có thẩm quyền lấy đúng open_id đã ghi và chạy trong thư mục `production/`:

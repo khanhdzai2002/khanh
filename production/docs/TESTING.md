@@ -5,7 +5,7 @@
 - Node.js 24.19.0, npm 11.9.0, PostgreSQL 17 trong Docker; migrations 001–004.
 - `npm run build`: TypeScript và Vite build thành công. Tailwind biên dịch cục bộ; không cần CDN giao diện V9.
 - `npm ci` theo lockfile chạy lại thành công. Sau cài lại, đã khởi động lại Vite để làm mới dependency optimization (server đang chạy trước đó trả 504 cho cache cũ), rồi xác minh login/logout DEV và API trả 401 sau logout.
-- `npm test`: **88 tests passed, 7 files**, không có test skip. 23 tests domain, 33 tests integration PostgreSQL/HTTP và 17 tests Lark mock/security, 10 tests cấu hình origin/callback, 3 tests lọc log và 2 tests SDK/web OAuth với transport giả lập.
+- `npm test`: **95 tests passed, 8 files**, không có test skip. 23 tests domain, 33 tests integration PostgreSQL/HTTP và 17 tests Lark mock/security, 10 tests cấu hình origin/callback, 3 tests lọc log 2 tests SDK/web OAuth với transport giả lập và 7 tests bootstrap Administrator.
 - Công thức: một test đối chiếu 400 đầu vào với chính hàm calc V9 trích nguyên văn, kiểm tra need/sale/raw/target/cover/flag. Có test riêng ví dụ 60, làm tròn, ngày chờ opt-in, thiếu tồn, bất thường và bốn vòng đời.
 - Giao dịch: nhiều màu/size, nhận 300+450+250 từ 1.000; chặn vượt nhận; idempotency đồng thời; sửa sau nhận, không giảm dưới đã nhận, không đổi SKU/xóa dòng nhận; revision trước/sau; hai người sửa cùng version; xóa/khôi phục; hủy và reopen; giữ mã đã dùng; trigger bất biến.
 - Import: CSV và XLSX thật, preview chưa ghi báo cáo, confirm lặp, replace giữ nguồn cũ, append bỏ trùng và khóa khi thiếu line ID, bỏ ngày xuất chưa đủ, chuyển bán giữ tồn/inbound/vòng đời/test. JSON V9: phát hiện trùng/số nhận lệch, giữ tồn unknown, không seed sales cũ; nhập lệnh đã xóa có 2 biên nhận và nguồn editLog, nhập bản nháp giữ trạng thái.
@@ -71,3 +71,11 @@ Lệnh mặc định ở root hiện chạy ERP trên Vite 5173 cùng backend 30
 ## Chạy lại
 
 Từ `production/`, chuẩn bị `.env.local`, database riêng kết thúc `_test`, chạy `npm ci`, `npm run build`, `npm test`. Runner không tạo database; chỉ cho phép suffix `_test`. Các tests reset dữ liệu test bằng TRUNCATE CASCADE, không thay source hoặc lockfile. Nếu có lỗi, giữ nguyên exit status và kiểm tra output thay vì chỉ nhìn số test cuối cùng.
+
+## Nút thao tác và khởi tạo quyền ban đầu
+
+File V9 gửi lại khớp SHA với bản gốc. 7 tests mới kiểm tra thiếu cấu hình không nâng quyền; sai Open ID/tenant, disabled hoặc đã có admin đều bị chặn; hai yêu cầu đồng thời chỉ một lần thành công/audit; đã tiêu thụ không tái dùng sau hạ quyền; API chỉ đọc danh tính của mình, cần session/CSRF, không nhận target/role từ browser.
+
+Chromium với database tổng hợp `_test` riêng xác minh Administrator/Planner thấy tạo lệnh và thêm SKU, Viewer/Warehouse không tạo được; Viewer thấy cảnh báo đúng quyền và thông tin tài khoản của chính mình; không có nút kích hoạt khi chưa được chủ hosting chỉ định. Mobile 390px không tràn và không lỗi JavaScript. Chỉ đổi role của fixture DEV trong database test để kiểm tra UI, không sửa tài khoản Lark thật hoặc lệnh thật.
+
+Đã bấm nút bootstrap trong Chromium bằng danh tính tổng hợp được cấu hình trên backend test: trước là Viewer, sau request thành công và reload là Administrator; nút tạo lệnh và tab Phân quyền xuất hiện; nút khởi tạo biến mất. Đây không phải cấp quyền cho tài khoản công ty trên Railway.

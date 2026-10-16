@@ -1,6 +1,6 @@
 # COMS-FLOW — Bảng đối chiếu V9
 
-Triển khai hiện tại: [Railway và Custom App Lark 1.0.0 đã phát hành](production/docs/RAILWAY_DEPLOY.md). Chưa có URL Railway thật; chưa đổi công thức nghiệp vụ.
+Triển khai hiện tại: [Railway và Custom App Lark 1.0.0 đã phát hành](production/docs/RAILWAY_DEPLOY.md). Người dùng đã mở được https://khanh-production.up.railway.app và xác nhận đăng nhập Lark bằng ảnh; vai trò hiện tại là Viewer. Chưa đổi công thức nghiệp vụ. Xem [đối chiếu nút thao tác và khởi tạo Administrator](production/docs/V9_BUTTON_AUDIT.md).
 
 
 ## Trạng thái và nguồn

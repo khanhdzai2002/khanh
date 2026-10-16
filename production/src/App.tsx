@@ -309,6 +309,15 @@ export default function App() {
               Không nhập dữ liệu sản xuất thật
             </div>
           )}
+          {user.role === "Viewer" && (
+            <Notice>
+              Bạn đang có quyền Viewer (chỉ xem), nên chưa thể thêm SKU, tạo/sửa
+              lệnh hoặc ghi nhận hàng.{" "}
+              <button onClick={() => navigate("settings")}>
+                Xem tài khoản & hướng dẫn cấp quyền
+              </button>
+            </Notice>
+          )}
           {error && (
             <div className="error" role="alert">
               {error}

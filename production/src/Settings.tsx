@@ -14,6 +14,7 @@ export function SettingsPage({
 }) {
   const [tab, setTab] = useState("setup"),
     [config, setConfig] = useState<any>({}),
+    [account, setAccount] = useState<any>(null),
     [users, setUsers] = useState<any[]>([]),
     [logs, setLogs] = useState<any[]>([]),
     [preview, setPreview] = useState<any>(null),
@@ -21,6 +22,9 @@ export function SettingsPage({
     [error, setError] = useState("");
   const admin = role === "Administrator";
   useEffect(() => {
+    void api("/api/account")
+      .then(setAccount)
+      .catch((e) => setError(e.message));
     void api("/auth/config")
       .then(setConfig)
       .catch((e) => setError(e.message));
@@ -66,6 +70,82 @@ export function SettingsPage({
       {error && <Notice>{error}</Notice>}
       {tab === "setup" && (
         <>
+          <section className="panel padded">
+            <h2>Tài khoản & quyền thao tác</h2>
+            <p>
+              Vai trò hiện tại: <strong>{role}</strong>. Viewer chỉ xem;
+              Production Planner tạo/sửa kế hoạch và lệnh; Warehouse Operator
+              ghi nhận hàng; Administrator quản trị toàn bộ.
+            </p>
+            {account && (
+              <>
+                <Field label="Lark Open ID của tài khoản đang đăng nhập">
+                  <input
+                    value={account.openId}
+                    readOnly
+                    aria-label="Lark Open ID của tôi"
+                  />
+                </Field>
+                <button
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(account.openId);
+                    } catch {
+                      setError(
+                        "Không sao chép tự động được. Hãy chọn và sao chép Open ID trong ô phía trên.",
+                      );
+                    }
+                  }}
+                >
+                  Sao chép Open ID của tôi
+                </button>
+                {!account.hasAdministrator && !account.bootstrapUsed ? (
+                  <>
+                    <Notice>
+                      Hệ thống chưa có Administrator. Chủ hệ thống cần chỉ định
+                      đúng tài khoản quản trị đầu tiên; nhân viên không được tự
+                      nâng quyền.
+                    </Notice>
+                    <ol>
+                      <li>
+                        Chủ hệ thống kiểm tra tên tài khoản ở góc trên và sao
+                        chép Open ID phía trên.
+                      </li>
+                      <li>
+                        Trong Railway → khanh → Variables, thêm{" "}
+                        <code>LARK_INITIAL_ADMIN_OPEN_ID</code> bằng Open ID đã
+                        chọn, rồi Deploy.
+                      </li>
+                      <li>
+                        Mở lại trang này bằng đúng tài khoản đó và nhấn nút khởi
+                        tạo khi xuất hiện.
+                      </li>
+                    </ol>
+                    {account.bootstrapEligible && (
+                      <button
+                        className="primary"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(async () => {
+                            await send("/api/admin/bootstrap", {});
+                            window.location.reload();
+                          }, "Đã khởi tạo Administrator cho tài khoản được chỉ định")
+                        }
+                      >
+                        Khởi tạo Administrator cho tài khoản của tôi
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <p>
+                    {admin
+                      ? "Mở tab Phân quyền để cấp vai trò cho nhân viên."
+                      : "Liên hệ Administrator để được cấp Production Planner hoặc quyền phù hợp công việc."}
+                  </p>
+                )}
+              </>
+            )}
+          </section>
           <div className="dashboard-grid">
             <section className="panel padded">
               <Link className="orange-text" />
