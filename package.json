@@ -1,12 +1,16 @@
 {
-  "name": "công-ty-đặt-xe-thông-minh",
+  "name": "coms-flow-workspace",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "setup": "npm --prefix production ci",
+    "dev": "node production/scripts/dev.mjs",
+    "build": "npm --prefix production run build",
+    "start": "npm --prefix production start",
+    "test": "npm --prefix production test",
+    "legacy:dev": "vite --port 5180 --strictPort",
+    "legacy:build": "vite build"
   },
   "dependencies": {
     "react-dom": "^19.1.0",

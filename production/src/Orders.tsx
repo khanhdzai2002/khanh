@@ -1,0 +1,1076 @@
+import { useState, useEffect, useRef } from "react";
+import {
+  Plus,
+  Search,
+  Download,
+  Printer,
+  Pencil,
+  Trash2,
+  PackagePlus,
+  RotateCcw,
+  Eye,
+} from "lucide-react";
+import { api, send } from "./api";
+import {
+  sizes,
+  priorities,
+  statuses,
+  forecast,
+  totals,
+  can,
+  type ProductionOrder,
+  type Variant,
+  type OrderInput,
+  type Role,
+} from "../shared/domain";
+import {
+  Empty,
+  Notice,
+  Modal,
+  Field,
+  fmt,
+  localTime,
+  vnDate,
+  type Run,
+} from "./ui";
+import type { Snapshot } from "./App";
+export function Orders({
+  data,
+  page,
+  actor,
+  run,
+  busy,
+  seed,
+  clearSeed,
+}: {
+  data: Snapshot;
+  page: string;
+  actor: { id: string; name: string; role: Role };
+  run: Run;
+  busy: boolean;
+  seed: Variant[];
+  clearSeed: () => void;
+}) {
+  const [search, setSearch] = useState(""),
+    [filter, setFilter] = useState(""),
+    [editing, setEditing] = useState<ProductionOrder | "new" | null>(null),
+    [selected, setSelected] = useState<string | null>(null);
+  const archived = page === "archived";
+  useEffect(() => {
+    if (seed.length && page === "orders") setEditing("new");
+  }, [seed, page]);
+  const all = data.orders.filter((o) => !!o.deletedAt === archived),
+    rows = all.filter(
+      (o) =>
+        (!search ||
+          [
+            o.code,
+            o.supplier,
+            o.requestedBy,
+            o.deletedReason,
+            ...o.items.map((i) => i.sku + " " + i.color),
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(search.toLowerCase())) &&
+        (!filter ||
+          (filter === "pending" && totals(o).pending > 0) ||
+          (filter === "done" && !o.cancelled && !totals(o).pending) ||
+          (filter === "cancelled" && o.cancelled)),
+    );
+  const selectedOrder = data.orders.find((o) => o.id === selected);
+  const action = async (o: ProductionOrder, name: string, label: string) => {
+    const reason = prompt(label + " — nhập lý do (ít nhất 3 ký tự)");
+    if (reason?.trim())
+      await run(() =>
+        send(`/api/orders/${o.id}/${name}`, {
+          expectedVersion: o.version,
+          reason,
+        }),
+      );
+  };
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <div className="eyebrow">
+            {archived ? "BẢO TOÀN DỮ LIỆU" : "02–03 / ĐIỀU PHỐI SẢN XUẤT"}
+          </div>
+          <h1>
+            {archived
+              ? "Lệnh sản xuất đã xóa"
+              : page === "history"
+                ? "Lịch sử & giao nhận"
+                : "Gối lệnh sản xuất"}
+          </h1>
+          <p>
+            {archived
+              ? "Dữ liệu, biên nhận và nhật ký được giữ nguyên; có thể khôi phục."
+              : "Từ nhu cầu sản xuất đến lần giao cuối cùng — theo dõi trên cùng một lệnh."}
+          </p>
+        </div>
+        {!archived && can(actor.role, "order") && (
+          <button className="primary" onClick={() => setEditing("new")}>
+            <Plus size={17} />
+            Tạo lệnh sản xuất
+          </button>
+        )}
+      </div>
+      <div className="mini-kpis">
+        {[
+          ["Lệnh", all.length],
+          ["Đã đặt", all.reduce((n, o) => n + totals(o).placed, 0)],
+          ["Đã nhận", all.reduce((n, o) => n + totals(o).received, 0)],
+          [
+            "Còn chờ",
+            all.reduce(
+              (n, o) =>
+                n +
+                (archived
+                  ? (o.pendingAtDeletion ?? totals(o).pending)
+                  : totals(o).pending),
+              0,
+            ),
+          ],
+        ].map(([label, value]) => (
+          <div key={label}>
+            <small>{label}</small>
+            <strong>{fmt(Number(value))}</strong>
+          </div>
+        ))}
+      </div>
+      <section className="panel">
+        <div className="toolbar">
+          <div className="search">
+            <Search size={17} />
+            <input
+              placeholder="Tìm mã lệnh, mã SP, màu, xưởng…"
+              aria-label="Tìm lệnh"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <select
+            aria-label="Trạng thái giao hàng"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          >
+            <option value="">Tất cả trạng thái</option>
+            <option value="pending">Chưa giao đủ</option>
+            <option value="done">Đã giao đủ</option>
+            <option value="cancelled">Đã hủy phần còn lại</option>
+          </select>
+          <span className="spacer" />
+          <a
+            className="button"
+            href={"/api/export/" + (archived ? "archived" : "orders")}
+          >
+            <Download size={16} />
+            CSV
+          </a>
+          <a
+            className="button"
+            href={
+              "/api/export/" +
+              (archived ? "archived" : "orders") +
+              "?format=xlsx"
+            }
+          >
+            Excel
+          </a>
+        </div>
+        {rows.length ? (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  {[
+                    "Mã lệnh",
+                    "Ngày lập",
+                    "Nhà xưởng",
+                    "Hẹn giao",
+                    "Đã đặt",
+                    "Đã nhận",
+                    "Còn chờ",
+                    "Tiến độ",
+                    "Trạng thái",
+                    archived ? "Lý do xóa" : "Người đặt",
+                    "Thao tác",
+                  ].map((s) => (
+                    <th key={s}>{s}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((o) => {
+                  const t = totals(o);
+                  return (
+                    <tr key={o.id}>
+                      <td className="product-code">{o.code}</td>
+                      <td>{vnDate(o.time)}</td>
+                      <td>{o.supplier}</td>
+                      <td>{o.delivery || "Chưa hẹn"}</td>
+                      <td>{fmt(t.placed)}</td>
+                      <td>{fmt(t.received)}</td>
+                      <td className="orange-text">
+                        {fmt(
+                          archived
+                            ? (o.pendingAtDeletion ?? t.pending)
+                            : t.pending,
+                        )}
+                      </td>
+                      <td>
+                        <div className="progress">
+                          <i style={{ width: t.percent + "%" }} />
+                        </div>
+                        <small>{fmt(t.percent)}%</small>
+                      </td>
+                      <td>
+                        <span
+                          className={"badge " + (t.pending ? "orange" : "")}
+                        >
+                          {t.status}
+                        </span>
+                      </td>
+                      <td className="color-cell">
+                        {archived ? (
+                          <>
+                            {o.deletedReason}
+                            <small>{vnDate(o.deletedAt || "")}</small>
+                          </>
+                        ) : (
+                          o.requestedBy
+                        )}
+                      </td>
+                      <td>
+                        <div className="row-actions">
+                          <button
+                            title="Xem chi tiết / nhận hàng"
+                            onClick={() => setSelected(o.id)}
+                          >
+                            <Eye size={15} />
+                            Chi tiết
+                          </button>
+                          {!archived && can(actor.role, "order") && (
+                            <button
+                              title="Chỉnh sửa lệnh"
+                              onClick={() => setEditing(o)}
+                            >
+                              <Pencil size={15} />
+                            </button>
+                          )}
+                          {!archived && can(actor.role, "archive") && (
+                            <button
+                              title="Xóa mềm"
+                              disabled={busy}
+                              onClick={() =>
+                                void action(
+                                  o,
+                                  "delete",
+                                  "Chuyển lệnh vào lịch sử đã xóa",
+                                )
+                              }
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          )}
+                          {archived && can(actor.role, "archive") && (
+                            <button
+                              disabled={busy}
+                              onClick={() =>
+                                void action(o, "restore", "Khôi phục lệnh")
+                              }
+                            >
+                              <RotateCcw size={15} />
+                              Khôi phục
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <Empty>
+            {archived
+              ? "Chưa có lệnh đã xóa phù hợp."
+              : "Chưa có lệnh phù hợp. Tạo lệnh từ kế hoạch hoặc thêm SKU thủ công."}
+          </Empty>
+        )}
+      </section>
+      <Notice>
+        Trạng thái “Đã gửi xưởng” là thông tin nội bộ. Ứng dụng chưa gửi email
+        hoặc tin nhắn tới xưởng. Xóa mềm khác với hủy phần còn chờ.
+      </Notice>
+      {editing && (
+        <OrderEditor
+          key={editing === "new" ? "new" : editing.id}
+          order={editing === "new" ? null : editing}
+          seed={seed}
+          data={data}
+          actor={actor}
+          busy={busy}
+          run={run}
+          onClose={() => {
+            setEditing(null);
+            clearSeed();
+          }}
+        />
+      )}
+      {selectedOrder && (
+        <OrderDetail
+          order={selectedOrder}
+          actor={actor}
+          run={run}
+          busy={busy}
+          onClose={() => setSelected(null)}
+          edit={() => {
+            setSelected(null);
+            setEditing(selectedOrder);
+          }}
+          action={action}
+        />
+      )}
+    </>
+  );
+}
+function OrderEditor({
+  order,
+  seed,
+  data,
+  actor,
+  busy,
+  run,
+  onClose,
+}: {
+  order: ProductionOrder | null;
+  seed: Variant[];
+  data: Snapshot;
+  actor: { name: string };
+  busy: boolean;
+  run: Run;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState<OrderInput>({
+    code: order?.code,
+    time: order?.time || new Date().toISOString(),
+    supplier: order?.supplier || "",
+    delivery: order?.delivery || null,
+    requestedBy: order?.requestedBy || actor.name,
+    notes: order?.notes || "",
+    status: (order?.status || "Nháp") as OrderInput["status"],
+    items: order
+      ? order.items.map((i) => ({
+          id: i.id,
+          variantId: i.variantId,
+          qty: i.qty,
+          priority: i.priority as any,
+        }))
+      : seed.map((s) => ({
+          variantId: s.id,
+          qty: forecast(s, data.policy).need,
+          priority:
+            forecast(s, data.policy).flag === "critical"
+              ? "CẤP BÁCH"
+              : "THƯỜNG",
+        })),
+  });
+  const [reason, setReason] = useState(""),
+    [reopen, setReopen] = useState(false),
+    [code, setCode] = useState(""),
+    [colors, setColors] = useState<string[]>([]),
+    [quantities, setQuantities] = useState<Record<string, number>>({
+      S: 1,
+      M: 1,
+      L: 1,
+    }),
+    [priority, setPriority] = useState<(typeof priorities)[number]>("THƯỜNG");
+  const variants = new Map(data.skus.map((s) => [s.id, s]));
+  const groups = new Map<
+    string,
+    { sku: string; color: string; items: OrderInput["items"] }
+  >();
+  for (const item of form.items) {
+    const v = variants.get(item.variantId);
+    if (!v) continue;
+    const key = JSON.stringify([v.sku, v.color]);
+    const g = groups.get(key) || { sku: v.sku, color: v.color, items: [] };
+    g.items.push(item);
+    groups.set(key, g);
+  }
+  const patch = (key: keyof OrderInput, value: unknown) =>
+    setForm({ ...form, [key]: value });
+  const locked = (item: OrderInput["items"][number]) =>
+    order?.items.find((i) => i.id === item.id)?.received || 0;
+  const add = () => {
+    const list = [...form.items];
+    for (const color of colors)
+      for (const size of sizes) {
+        const variant = data.skus.find(
+          (s) => s.sku === code && s.color === color && s.size === size,
+        );
+        const qty = quantities[size] || 0;
+        if (!variant || qty <= 0) continue;
+        const old = list.find((i) => i.variantId === variant.id);
+        if (old) {
+          old.qty += qty;
+        } else list.push({ variantId: variant.id, qty, priority });
+      }
+    setForm({ ...form, items: list });
+  };
+  function sizeCell(
+    group: { sku: string; color: string; items: OrderInput["items"] },
+    size: string,
+  ) {
+    const variant = data.skus.find(
+        (v) =>
+          v.sku === group.sku && v.color === group.color && v.size === size,
+      ),
+      item = group.items.find((i) => i.variantId === variant?.id);
+    if (!variant)
+      return <span title="Chưa có SKU size này trong danh mục">—</span>;
+    return (
+      <input
+        type="number"
+        aria-label={`${group.sku} ${group.color} ${size}`}
+        min={item ? locked(item) : 0}
+        max="1000000"
+        step="1"
+        value={item?.qty || 0}
+        disabled={busy || (!!order?.cancelled && !reopen)}
+        onChange={(e) => {
+          const qty = Number(e.target.value);
+          let list = form.items.map((i) => ({ ...i }));
+          const old = list.find((i) => i.variantId === variant.id);
+          if (old) {
+            old.qty = qty;
+            if (qty === 0 && !locked(old))
+              list = list.filter((i) => i.variantId !== variant.id);
+          } else if (qty > 0)
+            list.push({ variantId: variant.id, qty, priority: "THƯỜNG" });
+          patch("items", list);
+        }}
+      />
+    );
+  }
+  return (
+    <Modal
+      title={order ? "Chỉnh sửa " + order.code : "Lập lệnh sản xuất"}
+      onClose={onClose}
+      wide
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void run(
+            () =>
+              order
+                ? send(
+                    "/api/orders/" + order.id,
+                    {
+                      expectedVersion: order.version,
+                      reason,
+                      reopen,
+                      order: form,
+                    },
+                    "PUT",
+                  )
+                : send("/api/orders", form),
+            order ? "Đã lưu chỉnh sửa và nhật ký" : "Đã lưu lệnh sản xuất",
+          ).then((ok) => {
+            if (ok) onClose();
+          });
+        }}
+      >
+        <div className="form-grid columns-3">
+          <Field label="Mã lệnh (để trống để sinh tự động)">
+            <input
+              value={form.code || ""}
+              onChange={(e) =>
+                patch("code", e.target.value.trim() || undefined)
+              }
+              placeholder="LSX-YYYYMMDD-01"
+            />
+          </Field>
+          <Field label="Ngày giờ lập lệnh (Việt Nam)">
+            <input
+              type="datetime-local"
+              required
+              value={localTime(form.time)}
+              onChange={(e) => {
+                if (e.target.value)
+                  patch(
+                    "time",
+                    new Date(e.target.value + ":00+07:00").toISOString(),
+                  );
+              }}
+            />
+          </Field>
+          <Field label="Nhà xưởng">
+            <input
+              required
+              list="suppliers"
+              value={form.supplier}
+              onChange={(e) => patch("supplier", e.target.value)}
+            />
+            <datalist id="suppliers">
+              {[...new Set(data.orders.map((o) => o.supplier))].map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </datalist>
+          </Field>
+          <Field label="Ngày yêu cầu giao">
+            <input
+              type="date"
+              value={form.delivery || ""}
+              onChange={(e) => patch("delivery", e.target.value || null)}
+            />
+          </Field>
+          <Field label="Người đặt lệnh">
+            <input
+              required
+              value={form.requestedBy}
+              onChange={(e) => patch("requestedBy", e.target.value)}
+            />
+          </Field>
+          <Field label="Trạng thái nội bộ">
+            <select
+              value={form.status}
+              onChange={(e) => patch("status", e.target.value)}
+            >
+              {statuses.map((s) => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        {order?.cancelled && (
+          <Notice>
+            <label className="check-label">
+              <input
+                type="checkbox"
+                checked={reopen}
+                onChange={(e) => setReopen(e.target.checked)}
+              />
+              Khôi phục phần chưa nhận trước khi sửa số lượng
+            </label>
+          </Notice>
+        )}
+        <div className="table-scroll order-matrix">
+          <table>
+            <thead>
+              <tr>
+                <th>Mã SP</th>
+                <th>Màu</th>
+                {sizes.map((s) => (
+                  <th key={s}>{s}</th>
+                ))}
+                <th>Tổng</th>
+                <th>Ưu tiên</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {[...groups.entries()].map(([key, g]) => (
+                <tr key={key}>
+                  <td className="product-code">{g.sku}</td>
+                  <td className="color-cell">{g.color}</td>
+                  {sizes.map((size) => (
+                    <td key={size}>{sizeCell(g, size)}</td>
+                  ))}
+                  <td>
+                    <b>{fmt(g.items.reduce((n, i) => n + i.qty, 0))}</b>
+                  </td>
+                  <td>
+                    <select
+                      aria-label={"Ưu tiên " + g.sku + " " + g.color}
+                      value={
+                        g.items.some((i) => i.priority === "CẤP BÁCH")
+                          ? "CẤP BÁCH"
+                          : g.items.some((i) => i.priority === "ƯU TIÊN")
+                            ? "ƯU TIÊN"
+                            : "THƯỜNG"
+                      }
+                      onChange={(e) =>
+                        patch(
+                          "items",
+                          form.items.map((i) =>
+                            g.items.includes(i)
+                              ? { ...i, priority: e.target.value }
+                              : i,
+                          ),
+                        )
+                      }
+                    >
+                      {priorities.map((p) => (
+                        <option key={p}>{p}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      title="Bỏ nhóm màu"
+                      disabled={
+                        g.items.some((i) => locked(i) > 0) ||
+                        (!!order?.cancelled && !reopen)
+                      }
+                      onClick={() =>
+                        patch(
+                          "items",
+                          form.items.filter((i) => !g.items.includes(i)),
+                        )
+                      }
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <th colSpan={2}>TỔNG CỘNG</th>
+                {sizes.map((size) => (
+                  <th key={size}>
+                    {fmt(
+                      form.items
+                        .filter((i) => variants.get(i.variantId)?.size === size)
+                        .reduce((n, i) => n + i.qty, 0),
+                    )}
+                  </th>
+                ))}
+                <th>{fmt(form.items.reduce((n, i) => n + i.qty, 0))}</th>
+                <th colSpan={2} />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        {order && (
+          <small>
+            Dòng đã có biên nhận giữ nguyên mã–màu–size; không được giảm số đặt
+            dưới số đã nhận hoặc xóa nhóm có hàng nhận.
+          </small>
+        )}
+        <section className="add-box">
+          <h3>Thêm SKU từ danh mục / dòng thủ công</h3>
+          <div className="form-grid">
+            <Field label="Mã sản phẩm">
+              <select
+                value={code}
+                onChange={(e) => {
+                  setCode(e.target.value);
+                  setColors([]);
+                }}
+              >
+                <option value="">Chọn mã</option>
+                {[...new Set(data.skus.map((s) => s.sku))].map((s) => (
+                  <option key={s}>{s}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Ưu tiên">
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as typeof priority)}
+              >
+                {priorities.map((p) => (
+                  <option key={p}>{p}</option>
+                ))}
+              </select>
+            </Field>
+          </div>
+          <div className="size-selector">
+            {[
+              ...new Set(
+                data.skus.filter((s) => s.sku === code).map((s) => s.color),
+              ),
+            ].map((c) => (
+              <label key={c}>
+                <input
+                  type="checkbox"
+                  checked={colors.includes(c)}
+                  onChange={(e) =>
+                    setColors(
+                      e.target.checked
+                        ? [...colors, c]
+                        : colors.filter((x) => x !== c),
+                    )
+                  }
+                />
+                {c}
+              </label>
+            ))}
+          </div>
+          <div className="size-inputs">
+            {sizes.map((s) => (
+              <Field key={s} label={s}>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  max="1000000"
+                  value={quantities[s] || 0}
+                  onChange={(e) =>
+                    setQuantities({
+                      ...quantities,
+                      [s]: Number(e.target.value),
+                    })
+                  }
+                />
+              </Field>
+            ))}
+          </div>
+          <button
+            type="button"
+            disabled={!colors.length || busy || (!!order?.cancelled && !reopen)}
+            onClick={add}
+          >
+            <Plus size={15} />
+            Thêm các màu đã chọn
+          </button>
+          <small>
+            Chỉ thêm size đã có SKU trong danh mục. Tạo mã/màu/size mới ở Dự
+            kiến sản xuất trước khi lập lệnh.
+          </small>
+        </section>
+        <Field label="Ghi chú gửi xưởng">
+          <textarea
+            value={form.notes}
+            onChange={(e) => patch("notes", e.target.value)}
+          />
+        </Field>
+        {order && (
+          <Field label="Lý do chỉnh sửa (bắt buộc)">
+            <input
+              required
+              minLength={3}
+              maxLength={450}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </Field>
+        )}
+        <Notice>
+          Lưu lệnh giữ nguyên trạng thái đã chọn; không tự gửi email/tin nhắn.
+          Người thực hiện được lấy từ phiên đăng nhập, khác với trường “Người
+          đặt lệnh”.
+        </Notice>
+        <div className="modal-actions">
+          <button type="button" onClick={onClose}>
+            Đóng, không lưu
+          </button>
+          <button className="primary" disabled={busy || !form.items.length}>
+            {order ? "Lưu chỉnh sửa và nhật ký" : "Lưu lệnh vào lịch sử"}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+function OrderDetail({
+  order,
+  actor,
+  run,
+  busy,
+  onClose,
+  edit,
+  action,
+}: {
+  order: ProductionOrder;
+  actor: { role: Role };
+  run: Run;
+  busy: boolean;
+  onClose: () => void;
+  edit: () => void;
+  action: (o: ProductionOrder, name: string, label: string) => Promise<void>;
+}) {
+  const [history, setHistory] = useState<any>(null),
+    [historyError, setHistoryError] = useState(""),
+    [date, setDate] = useState(
+      new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(
+        new Date(),
+      ),
+    ),
+    [note, setNote] = useState(""),
+    [qty, setQty] = useState<Record<string, number>>({});
+  const retry = useRef<{ payload: string; key: string } | null>(null);
+  const t = totals(order),
+    archived = !!order.deletedAt;
+  useEffect(() => {
+    void api(`/api/orders/${order.id}/history`)
+      .then(setHistory)
+      .catch((e) => setHistoryError(e.message));
+  }, [order.id, order.version]);
+  const receive = async () => {
+    const body = {
+      expectedVersion: order.version,
+      date,
+      note,
+      lines: Object.entries(qty)
+        .filter(([, q]) => q > 0)
+        .map(([itemId, q]) => ({ itemId, qty: q })),
+    };
+    const payload = JSON.stringify(body);
+    if (retry.current?.payload !== payload)
+      retry.current = { payload, key: crypto.randomUUID() };
+    const key = retry.current!.key;
+    if (
+      await run(
+        () =>
+          send(`/api/orders/${order.id}/receipts`, body, "POST", {
+            "Idempotency-Key": key,
+          }),
+        "Đã ghi nhận đợt giao; tồn kho không thay đổi",
+      )
+    ) {
+      setQty({});
+      setNote("");
+      retry.current = null;
+    }
+  };
+  return (
+    <Modal
+      title={(archived ? "Lệnh đã xóa · " : "") + order.code}
+      onClose={onClose}
+      wide
+    >
+      <div className="print-order">
+        <div className="order-summary">
+          <div>
+            <h3>{order.supplier}</h3>
+            <p>
+              Người đặt: {order.requestedBy} · Lập: {vnDate(order.time)}
+            </p>
+            <p>
+              Hẹn giao: {order.delivery || "Chưa hẹn"} ·{" "}
+              <span className="badge orange">{t.status}</span>
+            </p>
+            <p>{order.notes || "Không có ghi chú"}</p>
+          </div>
+          <div>
+            <strong>{fmt(t.percent)}%</strong>
+            <p>
+              {fmt(t.received)} / {fmt(t.placed)} sản phẩm
+            </p>
+            <div className="progress">
+              <i style={{ width: t.percent + "%" }} />
+            </div>
+          </div>
+        </div>
+        <div className="actions no-print">
+          <a
+            className="button"
+            href={`/api/export/${archived ? "archived" : "orders"}?id=${order.id}&format=xlsx`}
+          >
+            <Download size={15} />
+            Excel
+          </a>
+          <a
+            className="button"
+            href={`/api/export/${archived ? "archived" : "orders"}?id=${order.id}`}
+          >
+            CSV
+          </a>
+          <button onClick={() => window.print()}>
+            <Printer size={15} />
+            In / PDF
+          </button>
+          {!archived && can(actor.role, "order") && (
+            <button onClick={edit}>
+              <Pencil size={15} />
+              Chỉnh sửa
+            </button>
+          )}
+          {!archived && can(actor.role, "order") && (
+            <button
+              disabled={busy || (!t.pending && !order.cancelled)}
+              onClick={() =>
+                void action(
+                  order,
+                  order.cancelled ? "reopen" : "cancel",
+                  order.cancelled
+                    ? "Khôi phục phần chưa nhận"
+                    : "Hủy phần còn chờ",
+                )
+              }
+            >
+              {order.cancelled
+                ? "Khôi phục phần chưa nhận"
+                : "Hủy phần còn chờ"}
+            </button>
+          )}
+        </div>
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                {[
+                  "Mã SP",
+                  "Màu",
+                  "Size",
+                  "SL đặt",
+                  "Đã nhận",
+                  "Còn chờ",
+                  "Nhận đợt này",
+                ].map((s) => (
+                  <th key={s}>{s}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {order.items.map((i) => (
+                <tr key={i.id}>
+                  <td className="product-code">{i.sku}</td>
+                  <td className="color-cell">{i.color}</td>
+                  <td>{i.size}</td>
+                  <td>{fmt(i.qty)}</td>
+                  <td>{fmt(i.received)}</td>
+                  <td>{fmt(order.cancelled ? 0 : i.qty - i.received)}</td>
+                  <td>
+                    {!archived &&
+                    !order.cancelled &&
+                    can(actor.role, "receive") &&
+                    i.qty > i.received ? (
+                      <input
+                        className="number-input"
+                        type="number"
+                        aria-label={
+                          "Nhận " + i.sku + " " + i.color + " " + i.size
+                        }
+                        min="0"
+                        max={i.qty - i.received}
+                        step="1"
+                        disabled={busy}
+                        value={qty[i.id] || 0}
+                        onChange={(e) =>
+                          setQty({ ...qty, [i.id]: Number(e.target.value) })
+                        }
+                      />
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {!archived &&
+        can(actor.role, "receive") &&
+        !order.cancelled &&
+        t.pending > 0 && (
+          <div className="receipt-form no-print">
+            <Field label="Ngày nhận hàng">
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+              />
+            </Field>
+            <Field label="Ghi chú đợt giao">
+              <input
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="Giao đợt 1, thiếu size M…"
+              />
+            </Field>
+            <button
+              className="primary"
+              disabled={busy || !date || !Object.values(qty).some((n) => n > 0)}
+              onClick={() => void receive()}
+            >
+              <PackagePlus size={16} />
+              Ghi nhận hàng giao
+            </button>
+          </div>
+        )}
+      <Notice>
+        Đã đặt {fmt(t.placed)} · Đã nhận {fmt(t.received)} · Còn chờ{" "}
+        {fmt(t.pending)}. Biên nhận cũ bất biến. Ghi nhận hàng không tự cập nhật
+        tồn kho.
+      </Notice>
+      <h3>Lịch sử các đợt giao</h3>
+      {historyError && <Notice>{historyError}</Notice>}
+      {!history && !historyError && <p>Đang tải lịch sử…</p>}
+      {history?.receipts.length ? (
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Ngày nhận</th>
+                <th>Người ghi nhận</th>
+                <th>Mã / Màu / Size</th>
+                <th>SL</th>
+                <th>Ghi chú</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.receipts.flatMap((r: any) =>
+                r.lines.map((l: any, i: number) => (
+                  <tr key={r.id + "-" + i}>
+                    <td>{r.date.slice(0, 10)}</td>
+                    <td>{r.actor}</td>
+                    <td>
+                      {l.identity.sku} · {l.identity.color} · {l.identity.size}
+                    </td>
+                    <td>{l.qty}</td>
+                    <td>{r.note}</td>
+                  </tr>
+                )),
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        history && <p className="muted">Chưa ghi nhận đợt giao nào.</p>
+      )}
+      <h3>Nhật ký chỉnh sửa</h3>
+      {history?.revisions.map((r: any) => (
+        <details key={r.id}>
+          <summary>
+            {vnDate(r.at)} · {r.actor} · {r.reason}
+          </summary>
+          <div className="revision-grid">
+            <div>
+              <h4>Trước</h4>
+              <pre>{JSON.stringify(r.before, null, 2)}</pre>
+            </div>
+            <div>
+              <h4>Sau</h4>
+              <pre>{JSON.stringify(r.after, null, 2)}</pre>
+            </div>
+          </div>
+        </details>
+      ))}
+      {history && !history.revisions.length && (
+        <p className="muted">Chưa có chỉnh sửa.</p>
+      )}
+      <h3>Hoạt động của lệnh</h3>
+      {history?.activity
+        .filter((a: any) => a.action === "v9.order.source")
+        .map((a: any, i: number) => (
+          <details key={"legacy-" + i}>
+            <summary>
+              Nguồn V9 — lịch sử trước khi nhập (danh tính chưa xác thực Lark)
+            </summary>
+            <p>
+              Người nhập: {a.actor} · {vnDate(a.at)}. Danh tính trong dữ liệu cũ
+              không đồng nghĩa tài khoản Lark đã xác minh.
+            </p>
+            <pre>{JSON.stringify(a.details.legacy, null, 2)}</pre>
+          </details>
+        ))}
+      {history?.activity.map((a: any, i: number) => (
+        <p key={i} className="activity-line">
+          <strong>{a.actor}</strong> · {a.action} · {vnDate(a.at)}
+          {a.details?.reason ? " · " + a.details.reason : ""}
+        </p>
+      ))}
+    </Modal>
+  );
+}

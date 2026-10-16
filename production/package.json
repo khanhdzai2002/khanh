@@ -1,0 +1,49 @@
+{
+  "name": "coms-flow-production-management",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0 --port 5173 --strictPort",
+    "dev:all": "node scripts/dev.mjs",
+    "server": "tsx server/index.ts",
+    "migrate": "tsx server/migrate.ts",
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "start": "tsx server/index.ts",
+    "admin": "tsx server/admin.ts",
+    "deployment:check": "tsx scripts/deployment-check.ts"
+  },
+  "dependencies": {
+    "@larksuiteoapi/node-sdk": "1.76.0",
+    "connect-pg-simple": "^10.0.0",
+    "csv-parse": "^6.1.0",
+    "dotenv": "^17.2.0",
+    "exceljs": "^4.4.0",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.0.0",
+    "express-session": "^1.18.0",
+    "helmet": "^8.1.0",
+    "lucide-react": "^0.468.0",
+    "pg": "^8.16.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.0",
+    "@types/connect-pg-simple": "^7.0.0",
+    "@types/express": "^5.0.0",
+    "@types/express-session": "^1.18.0",
+    "@types/node": "^22.14.0",
+    "@types/pg": "^8.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "prettier": "3.9.10",
+    "tailwindcss": "^4.1.0",
+    "tsx": "^4.20.0",
+    "typescript": "~5.7.2",
+    "vite": "^6.2.0",
+    "vitest": "^3.2.0"
+  }
+}

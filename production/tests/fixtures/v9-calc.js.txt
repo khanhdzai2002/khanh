@@ -1,0 +1,21 @@
+// Extracted verbatim from user V9 SHA256 5e468146bd3ed292b7e4494a1276e4572d08161743a5f83f57adb36ce20b3316, lines 234-253. No embedded company sales.
+function calc(r){
+ const p=policyCheck(),c=p.c,stage=stageOf(r),sale=r.abnormal?num(r.manualRate):(num(r.day1)+num(r.day2))/2;
+ const known=r.stockKnown!==false,stock=num(r.stock),inbound=num(r.inbound),cover=known&&sale>0?stock/sale:null;
+ let need=0,raw=0,target=0,flag='new',basis='Chưa xác nhận win';
+ if(!p.valid){flag='invalid';basis='Sửa thiết lập ngày / bội số';}
+ else if(stage==='Xả kho'){flag='clear';basis='DỪNG GỐI: xả tồn';}
+ else if(stage==='Giảm sút'){flag='paused';basis='DỪNG GỐI: bán giảm';}
+ else if(stage==='Mở bán'){
+   raw=Math.max(0,Math.floor(num(r.pilotQty)||0));need=raw;
+   flag=need?'new':'new';basis=need?'SL test thủ công: '+fmt(need):'Không tự gối; nhập SL test';
+ }else if(!known){flag='unknown';basis='Thiếu tồn thực tế';}
+ else if(!sale){flag='unknown';basis='Thiếu tốc độ bán chuẩn';}
+ else{
+   target=Math.ceil(sale*num(c.targetDays));raw=Math.max(0,Math.ceil(sale*p.effectiveDays-stock-inbound));
+   const multiple=Number(c.roundTo);need=Math.ceil(raw/multiple)*multiple;
+   flag=need>0?(cover!==null&&cover<=num(c.leadDays)+2?'critical':'warning'):'ok';
+   basis=fmt(sale)+' × '+p.effectiveDays+' − '+fmt(stock)+' − '+fmt(inbound)+(multiple!==1?' (làm tròn bội '+multiple+')':'');
+ }
+ return{sale,target,need,raw,cover,flag,stage,basis,effectiveDays:p.effectiveDays,invalid:!p.valid}
+}
