@@ -4,12 +4,17 @@ Người dùng đã tạo Lark Custom App. Xem [hướng dẫn Railway và cập
 
 ## Tài liệu chính thức đã kiểm tra
 
-- [Lark Node SDK chính thức](https://github.com/larksuite/node-sdk), README và type definitions của `@larksuiteoapi/node-sdk` 1.76.0 đang khóa trong package-lock.json.
-- SDK xác nhận `AppType.SelfBuild`, `Domain.Lark`, `client.accessToken.retrieveByAuthorizationCode({code,redirectUri,codeVerifier})` và `authen.userInfo.get` kết hợp `withUserAccessToken`.
-- Trong SDK hiện hành, `client.accessToken` dùng OAuth token service `/oauth/v3/token` với domain tài khoản Lark; các phương thức `authen.accessToken`/OIDC v1 cũ được SDK đánh dấu không khuyến nghị. Mã không gọi các phương thức token v1 cũ.
-- [Tài liệu lấy user access token](https://open.larksuite.com/document/authentication-management/access-token/get-user-access-token), [API Explorer](https://open.larksuite.com/api-explorer), [Developer Console](https://open.larksuite.com/app).
+Ngày 16/10/2026 đã đọc trực tiếp bản Markdown trên Lark Developer:
 
-Trong môi trường hiện tại trang tài liệu trên `open.larksuite.com` chỉ trả trang khung SPA, tài nguyên nội dung tiếp theo bị proxy 403, nên nguồn đã đọc trực tiếp là repository/SDK chính thức trên GitHub/npm. Cần đối chiếu lại các tùy chọn console và quyền tại tenant trước rollout; không tuyên bố đã thử OAuth live. Đích mạng cần cho tích hợp: `accounts.larksuite.com` và `open.larksuite.com`; giữ các domain hiện có khi bổ sung allowlist, không thay cả danh sách bằng hai domain này.
+- [Hướng dẫn đăng nhập web](https://open.larksuite.com/document/common-capabilities/sso/web-application-end-user-consent/guide).
+- [Lấy authorization code, gồm PKCE S256](https://open.larksuite.com/document/common-capabilities/sso/api/obtain-oauth-code).
+- [Đổi code lấy user_access_token và bảng mã lỗi](https://open.larksuite.com/document/uAjLw4CM/ukTMukTMukTM/authentication-management/access-token/get-user-access-token).
+
+Cặp endpoint chính thức cho luồng web là `https://accounts.larksuite.com/open-apis/authen/v1/authorize` và `https://open.larksuite.com/open-apis/authen/v2/oauth/token`. Bản sửa dùng `server/lark-oauth.ts` gọi endpoint token v2 bằng SDK HTTP transport, có code_verifier/redirect_uri/client_id/client_secret, timeout 15 giây, không redirect hoặc retry code. Lấy danh tính vẫn dùng Node SDK 1.76.0, `AppType.SelfBuild`, `Domain.Lark`, `authen.userInfo.get` và `withUserAccessToken`.
+
+Helper `client.accessToken.retrieveByAuthorizationCode` của SDK hiện gửi tới `/oauth/v3/token`; phiên bản tích hợp trước đã dùng helper đó. Không tiếp tục dùng helper cho luồng web này, không thử lại cùng code trên endpoint khác. Không dùng token API v1 cũ và không bỏ PKCE để né lỗi. Theo tài liệu, 20049 là **PKCE code challenge failed**, khác lỗi Secret (20002), code hết hạn (20004), redirect mismatch (20071).
+
+Các trang HTML trước đây chỉ trả SPA; đường dẫn đầy đủ có hậu tố `.md` nay đã truy cập và đọc được. Đích API vẫn chỉ `accounts.larksuite.com` và `open.larksuite.com`. Kiểm thử HTTP giả lập chưa chứng minh OAuth trên tenant thực đã thành công.
 
 ## Tạo ứng dụng
 
@@ -21,7 +26,7 @@ Trong môi trường hiện tại trang tài liệu trên `open.larksuite.com` c
 6. Tại phần quyền, dùng API Explorer chính thức cho `authen.user_info.get` và cấp mức thông tin danh tính cần thiết mà console yêu cầu. Ứng dụng chỉ dùng open_id, name và tenant_key; không yêu cầu email/mobile/danh bạ toàn công ty. Không cấp quyền gửi tin vì ứng dụng chưa có tính năng gửi.
 7. Đặt phạm vi khả dụng cho nhân viên cần dùng, tạo phiên bản và thực hiện quy trình phát hành/phê duyệt nội bộ. Mã nguồn hoặc draft môi trường không tự làm bước publication này.
 
-Tên menu/quyền có thể khác theo phiên bản và tenant; lấy tên scope thực tế từ console/API Explorer, không tự cấp danh sách scope rộng để thử. Nếu tenant dùng cơ chế SSO/webview khác, cần xác thực lại authorization endpoint và chính sách cookie/CSP trên thiết bị thật. Mã hiện chuyển hướng tới `accounts.larksuite.com/open-apis/authen/v1/authorize` cho authorization code; trao đổi token dùng dịch vụ SDK hiện hành nêu trên. Test live là điều kiện bàn giao tích hợp.
+Tên menu/quyền có thể khác theo phiên bản và tenant; lấy tên scope thực tế từ console/API Explorer, không tự cấp danh sách scope rộng để thử. Nếu tenant dùng cơ chế SSO/webview khác, cần xác thực lại authorization endpoint và chính sách cookie/CSP trên thiết bị thật. Mã hiện chuyển hướng tới `accounts.larksuite.com/open-apis/authen/v1/authorize` cho authorization code; trao đổi token dùng endpoint v2 với SDK HTTP transport nêu trên. Test live là điều kiện bàn giao tích hợp.
 
 ## Đăng nhập và cấp Administrator đầu tiên
 

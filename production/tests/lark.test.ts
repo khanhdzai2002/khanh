@@ -11,6 +11,7 @@ import { createHash } from "node:crypto";
 import { pool } from "../server/db";
 import { migrate } from "../server/migrate";
 const mock = vi.hoisted(() => ({ token: vi.fn(), info: vi.fn() }));
+vi.mock("../server/lark-oauth", () => ({ exchangeLarkCode: mock.token }));
 vi.mock("@larksuiteoapi/node-sdk", () => ({
   Client: class {
     accessToken = { retrieveByAuthorizationCode: mock.token };

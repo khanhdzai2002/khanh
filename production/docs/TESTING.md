@@ -5,7 +5,7 @@
 - Node.js 24.19.0, npm 11.9.0, PostgreSQL 17 trong Docker; migrations 001–004.
 - `npm run build`: TypeScript và Vite build thành công. Tailwind biên dịch cục bộ; không cần CDN giao diện V9.
 - `npm ci` theo lockfile chạy lại thành công. Sau cài lại, đã khởi động lại Vite để làm mới dependency optimization (server đang chạy trước đó trả 504 cho cache cũ), rồi xác minh login/logout DEV và API trả 401 sau logout.
-- `npm test`: **83 tests passed, 6 files**, không có test skip. 23 tests domain, 33 tests integration PostgreSQL/HTTP và 15 tests Lark mock/security, 8 tests cấu hình origin/callback, 3 tests lọc log và 1 test SDK thật với transport giả lập.
+- `npm test`: **84 tests passed, 7 files**, không có test skip. 23 tests domain, 33 tests integration PostgreSQL/HTTP và 15 tests Lark mock/security, 8 tests cấu hình origin/callback, 3 tests lọc log và 2 tests SDK/web OAuth với transport giả lập.
 - Công thức: một test đối chiếu 400 đầu vào với chính hàm calc V9 trích nguyên văn, kiểm tra need/sale/raw/target/cover/flag. Có test riêng ví dụ 60, làm tròn, ngày chờ opt-in, thiếu tồn, bất thường và bốn vòng đời.
 - Giao dịch: nhiều màu/size, nhận 300+450+250 từ 1.000; chặn vượt nhận; idempotency đồng thời; sửa sau nhận, không giảm dưới đã nhận, không đổi SKU/xóa dòng nhận; revision trước/sau; hai người sửa cùng version; xóa/khôi phục; hủy và reopen; giữ mã đã dùng; trigger bất biến.
 - Import: CSV và XLSX thật, preview chưa ghi báo cáo, confirm lặp, replace giữ nguồn cũ, append bỏ trùng và khóa khi thiếu line ID, bỏ ngày xuất chưa đủ, chuyển bán giữ tồn/inbound/vòng đời/test. JSON V9: phát hiện trùng/số nhận lệch, giữ tồn unknown, không seed sales cũ; nhập lệnh đã xóa có 2 biên nhận và nguồn editLog, nhập bản nháp giữ trạng thái.
@@ -33,6 +33,12 @@ Bản build cũng đã được Node phục vụ với NODE_ENV=production, DEV_
 Khi provider thất bại, log `Lark OAuth failed` chỉ chứa stage (token_exchange hoặc user_info), HTTP status, mã provider dạng số và mã OAuth/network thuộc allowlist. Không log error message, response body, request config/header, code đăng nhập, token hoặc App Secret. User_info trả lỗi được phân loại 502 thay vì gán nhầm thành tenant sai; kiểm tra tenant vẫn bắt buộc khi đã có danh tính hợp lệ.
 
 Đã kiểm tra SDK 1.76.0 thực với Axios adapter giả lập: client_id/client_secret, redirect_uri, PKCE verifier đi vào request đổi code; user_info dùng đúng user Bearer token; cả hai giữ timeout 15 giây và maxRedirects=0. Đây là kiểm tra contract cục bộ, không gọi API thật hoặc chứng minh app/secret/quyền trong tenant đã đúng. Cần log đã lọc từ deployment thực để chẩn đoán lỗi provider.
+
+## Sửa luồng token web và PKCE theo tài liệu chính thức
+
+Log deployment do người dùng cung cấp có HTTP 400, providerCode 20049, invalid_grant ở token_exchange. Tài liệu chính thức xác nhận 20049 là PKCE challenge failed. Đã thay helper SDK trỏ `/oauth/v3/token` bằng endpoint web được tài liệu chỉ định `https://open.larksuite.com/open-apis/authen/v2/oauth/token`. Không khẳng định endpoint cũ là nguyên nhân duy nhất khi chưa thử lại OAuth thật.
+
+Test end-to-end cục bộ mới dùng router/session PostgreSQL thực, SDK HTTP transport thực và provider adapter giả lập: tạo authorize URL, lưu session/verifier, callback với code mới, kiểm tra SHA256(verifier) đúng challenge S256 từ URL, cùng client_id/redirect_uri, đúng endpoint v2/body JSON, user_info Bearer, tạo Viewer cá nhân và chặn callback replay. Cả token và user_info có timeout và chặn redirect. State một lần, PKCE và tenant check được giữ nguyên; không fallback endpoint/retry cùng code. Thử lại trên Railway bằng luồng đăng nhập mới vẫn là bước cần người dùng thực hiện.
 
 ## Sửa khởi động khi thiếu migrations trên Railway
 

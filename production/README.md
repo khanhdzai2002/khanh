@@ -34,7 +34,7 @@ npm test
 
 Nếu không đặt TEST_DATABASE_URL, runner lấy DATABASE_URL và thêm hậu tố `_test`; không tự tạo database và không bao giờ dùng database chính để reset. Tests truncate dữ liệu trong database test. Không chạy tests đồng thời với smoke UI trên cùng database.
 
-Có 83 tests, gồm 400 trường hợp đối chiếu công thức với hàm V9 nguyên gốc trong một test. Xem [bằng chứng và giới hạn kiểm thử](docs/TESTING.md).
+Có 84 tests, gồm 400 trường hợp đối chiếu công thức với hàm V9 nguyên gốc trong một test. Xem [bằng chứng và giới hạn kiểm thử](docs/TESTING.md).
 
 ## Tài liệu bàn giao
 

@@ -16,6 +16,7 @@ import { AppError, can, type Role } from "../shared/domain";
 import type { Actor } from "./service";
 import { callbackUrl, larkStatus, publicOrigin } from "./config";
 import { larkFailureDetails } from "./lark-diagnostics";
+import { exchangeLarkCode } from "./lark-oauth";
 declare module "express-session" {
   interface SessionData {
     userId?: string;
@@ -165,7 +166,7 @@ auth.get("/callback", async (req, res) => {
   let stage: "token_exchange" | "user_info" = "token_exchange";
   try {
     // Authorization codes are single-use: never automatically retry this exchange.
-    const token = await client.accessToken.retrieveByAuthorizationCode({
+    const token = await exchangeLarkCode({
       code: req.query.code,
       redirectUri: callbackUrl(),
       codeVerifier: attempt.code_verifier,

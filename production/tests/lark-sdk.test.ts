@@ -2,6 +2,7 @@ import { it, expect } from "vitest";
 import * as sdk from "@larksuiteoapi/node-sdk";
 import { larkClient } from "../server/auth";
 import { pool } from "../server/db";
+import { exchangeLarkCode, LARK_WEB_TOKEN_URL } from "../server/lark-oauth";
 
 it("SDK thật ánh xạ PKCE/token/user_info và giữ timeout trên HTTP transport giả lập", async () => {
   const names = [
@@ -26,8 +27,12 @@ it("SDK thật ánh xạ PKCE/token/user_info và giữ timeout trên HTTP trans
     http.defaults.adapter = async (config: any) => {
       calls.push(config);
       const data =
-        config.url === "https://accounts.larksuite.com/oauth/v3/token"
-          ? { access_token: "synthetic-access-token", token_type: "Bearer" }
+        config.url === LARK_WEB_TOKEN_URL
+          ? {
+              code: "0",
+              access_token: "synthetic-access-token",
+              token_type: "Bearer",
+            }
           : {
               code: 0,
               data: {
@@ -38,10 +43,10 @@ it("SDK thật ánh xạ PKCE/token/user_info và giữ timeout trên HTTP trans
       return { data, status: 200, statusText: "OK", headers: {}, config };
     };
     const client = larkClient();
-    const token = await client.accessToken.retrieveByAuthorizationCode({
+    const token = await exchangeLarkCode({
       code: "synthetic-auth-code",
       redirectUri: "https://synthetic-sdk.invalid/auth/callback",
-      codeVerifier: "synthetic-verifier",
+      codeVerifier: "synthetic-verifier".repeat(4),
     });
     expect(token.accessToken).toBe("synthetic-access-token");
     const user = await client.authen.userInfo.get(
@@ -55,9 +60,12 @@ it("SDK thật ánh xạ PKCE/token/user_info và giữ timeout trên HTTP trans
       client_secret: "synthetic-secret",
       grant_type: "authorization_code",
       code: "synthetic-auth-code",
-      code_verifier: "synthetic-verifier",
+      code_verifier: "synthetic-verifier".repeat(4),
       redirect_uri: "https://synthetic-sdk.invalid/auth/callback",
     });
+    expect(calls[0].url).toBe(
+      "https://open.larksuite.com/open-apis/authen/v2/oauth/token",
+    );
     expect(calls[1].url).toBe(
       "https://open.larksuite.com/open-apis/authen/v1/user_info",
     );

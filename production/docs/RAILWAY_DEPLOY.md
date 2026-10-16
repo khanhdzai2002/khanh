@@ -107,7 +107,7 @@ Dùng môi trường staging hoặc dữ liệu tổng hợp được phép, kh�
 - Lệnh 1.000, nhận 300 rồi 450 → còn 250, tiến độ 75%; không nhận vượt. Không tự cộng tồn. Sửa giữ số nhận/audit; xóa mềm rồi khôi phục.
 - Reload, logout/login, bấm **Redeploy** web service với cùng Postgres rồi kiểm tra dữ liệu test và lịch sử vẫn còn. Không xóa database/volume.
 - Thử import file tổng hợp CSV/XLSX, combo cần đối soát không quy về một SKU; tồn/vòng đời không bị ghi đè khi chuyển số bán.
-- Chỉ đánh dấu hoàn thành khi các kiểm tra ngoài và OAuth thật đã đạt. 83 tests cục bộ không thay thế nghiệm thu này.
+- Chỉ đánh dấu hoàn thành khi các kiểm tra ngoài và OAuth thật đã đạt. 84 tests cục bộ không thay thế nghiệm thu này.
 
 ## Backup và giám sát
 

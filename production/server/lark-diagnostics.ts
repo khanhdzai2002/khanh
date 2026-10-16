@@ -20,6 +20,8 @@ const transportErrors = new Set([
   "ERR_BAD_RESPONSE",
   "MISSING_ACCESS_TOKEN",
   "INVALID_USER_INFO",
+  "INVALID_CODE_VERIFIER",
+  "INVALID_REDIRECT_URI",
 ]);
 
 // Never spread a provider/Axios error or log its message, response body, headers,
@@ -30,7 +32,11 @@ export function larkFailureDetails(
 ) {
   const e = error as any;
   const status = e?.statusCode ?? e?.response?.status;
-  const code = e?.response?.data?.code ?? e?.code;
+  const rawCode = e?.response?.data?.code ?? e?.code;
+  const code =
+    typeof rawCode === "string" && /^\d{1,9}$/.test(rawCode)
+      ? Number(rawCode)
+      : rawCode;
   const oauthError = e?.error ?? e?.response?.data?.error;
   return {
     stage,
