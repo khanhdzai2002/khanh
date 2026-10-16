@@ -5,7 +5,7 @@
 - Node.js 24.19.0, npm 11.9.0, PostgreSQL 17 trong Docker; migrations 001–004.
 - `npm run build`: TypeScript và Vite build thành công. Tailwind biên dịch cục bộ; không cần CDN giao diện V9.
 - `npm ci` theo lockfile chạy lại thành công. Sau cài lại, đã khởi động lại Vite để làm mới dependency optimization (server đang chạy trước đó trả 504 cho cache cũ), rồi xác minh login/logout DEV và API trả 401 sau logout.
-- `npm test`: **84 tests passed, 7 files**, không có test skip. 23 tests domain, 33 tests integration PostgreSQL/HTTP và 15 tests Lark mock/security, 8 tests cấu hình origin/callback, 3 tests lọc log và 2 tests SDK/web OAuth với transport giả lập.
+- `npm test`: **88 tests passed, 7 files**, không có test skip. 23 tests domain, 33 tests integration PostgreSQL/HTTP và 17 tests Lark mock/security, 10 tests cấu hình origin/callback, 3 tests lọc log và 2 tests SDK/web OAuth với transport giả lập.
 - Công thức: một test đối chiếu 400 đầu vào với chính hàm calc V9 trích nguyên văn, kiểm tra need/sale/raw/target/cover/flag. Có test riêng ví dụ 60, làm tròn, ngày chờ opt-in, thiếu tồn, bất thường và bốn vòng đời.
 - Giao dịch: nhiều màu/size, nhận 300+450+250 từ 1.000; chặn vượt nhận; idempotency đồng thời; sửa sau nhận, không giảm dưới đã nhận, không đổi SKU/xóa dòng nhận; revision trước/sau; hai người sửa cùng version; xóa/khôi phục; hủy và reopen; giữ mã đã dùng; trigger bất biến.
 - Import: CSV và XLSX thật, preview chưa ghi báo cáo, confirm lặp, replace giữ nguồn cũ, append bỏ trùng và khóa khi thiếu line ID, bỏ ngày xuất chưa đủ, chuyển bán giữ tồn/inbound/vòng đời/test. JSON V9: phát hiện trùng/số nhận lệch, giữ tồn unknown, không seed sales cũ; nhập lệnh đã xóa có 2 biên nhận và nguồn editLog, nhập bản nháp giữ trạng thái.
@@ -33,6 +33,12 @@ Bản build cũng đã được Node phục vụ với NODE_ENV=production, DEV_
 Khi provider thất bại, log `Lark OAuth failed` chỉ chứa stage (token_exchange hoặc user_info), HTTP status, mã provider dạng số và mã OAuth/network thuộc allowlist. Không log error message, response body, request config/header, code đăng nhập, token hoặc App Secret. User_info trả lỗi được phân loại 502 thay vì gán nhầm thành tenant sai; kiểm tra tenant vẫn bắt buộc khi đã có danh tính hợp lệ.
 
 Đã kiểm tra SDK 1.76.0 thực với Axios adapter giả lập: client_id/client_secret, redirect_uri, PKCE verifier đi vào request đổi code; user_info dùng đúng user Bearer token; cả hai giữ timeout 15 giây và maxRedirects=0. Đây là kiểm tra contract cục bộ, không gọi API thật hoặc chứng minh app/secret/quyền trong tenant đã đúng. Cần log đã lọc từ deployment thực để chẩn đoán lỗi provider.
+
+## Phân biệt tenant mismatch và tài khoản bị khóa
+
+Backend dùng tenant key đã trim khoảng trắng đầu/cuối (giữ nguyên chữ hoa/thường) cho đối chiếu và CLI bootstrap. Giá trị có dấu nháy hoặc khoảng trắng bên trong trả lỗi cấu hình rõ, không âm thầm đổi tổ chức. Callback tách tenant_mismatch và account_disabled; UI hiển thị lý do cụ thể và nơi cấu hình. Log từ chối chỉ có reason và fingerprint SHA256 rút gọn của tenant; không log key thô, tên hoặc open_id.
+
+Tests xác minh tenant khác vẫn 403 và không tạo người dùng, redirect lỗi cụ thể, tenant có whitespace ngoài vẫn vào đúng Viewer, tài khoản disabled vẫn bị chặn và không có session đăng nhập. Không tự bật tài khoản, không bỏ tenant check hoặc tin tenant đầu tiên. Tenant key sai thực tế trên Railway vẫn cần người quản trị nhập đúng data.tenant_key của tổ chức công ty; Codex không có quyền đọc/sửa Railway Variables. Chromium đã kiểm tra cả hai thông báo, xóa query lỗi và bố cục 390px không tràn, không lỗi JavaScript. Lần mở đầu trùng lúc Vite tối ưu dependency và tự reload nên assertion thiếu thông báo; sau khi cache ổn định, chạy lại cả hai trường hợp thành công. Không ghi nghiệp vụ trong kiểm tra giao diện.
 
 ## Sửa luồng token web và PKCE theo tài liệu chính thức
 

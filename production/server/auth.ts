@@ -14,7 +14,12 @@ import * as lark from "@larksuiteoapi/node-sdk";
 import { pool, audit, transaction } from "./db";
 import { AppError, can, type Role } from "../shared/domain";
 import type { Actor } from "./service";
-import { callbackUrl, larkStatus, publicOrigin } from "./config";
+import {
+  callbackUrl,
+  larkStatus,
+  publicOrigin,
+  configuredTenantKey,
+} from "./config";
 import { larkFailureDetails } from "./lark-diagnostics";
 import { exchangeLarkCode } from "./lark-oauth";
 declare module "express-session" {
@@ -36,6 +41,16 @@ export function larkConfigured() {
 }
 const hash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
+class LarkAccessDenied extends AppError {
+  constructor(public reason: "tenant_mismatch" | "account_disabled") {
+    super(
+      403,
+      reason === "tenant_mismatch"
+        ? "Tổ chức Lark của tài khoản không khớp LARK_TENANT_KEY cấu hình trên Railway. Kiểm tra đúng tổ chức công ty và giá trị data.tenant_key."
+        : "Tài khoản đã bị vô hiệu hóa trong COMS-FLOW. Liên hệ Administrator để kiểm tra quyền truy cập.",
+    );
+  }
+}
 const safeLogger = {
   error: () => {},
   warn: () => {},
@@ -188,15 +203,25 @@ auth.get("/callback", async (req, res) => {
     );
   }
   const u = result.data;
-  if (!u?.open_id || u.tenant_key !== process.env.LARK_TENANT_KEY)
-    throw new AppError(403, "Tài khoản không thuộc tenant được phép");
+  const expectedTenant = configuredTenantKey();
+  if (u.tenant_key !== expectedTenant) {
+    console.warn("Lark access denied", {
+      reason: "tenant_mismatch",
+      expectedTenantFingerprint: hash(expectedTenant).slice(0, 16),
+      receivedTenantFingerprint: hash(u.tenant_key!).slice(0, 16),
+    });
+    throw new LarkAccessDenied("tenant_mismatch");
+  }
   const user = (
     await pool.query(
       "INSERT INTO users(id,tenant_key,open_id,name) VALUES($1,$2,$3,$4) ON CONFLICT(tenant_key,open_id) DO UPDATE SET name=excluded.name RETURNING *",
       [randomUUID(), u.tenant_key, u.open_id, u.name || u.open_id],
     )
   ).rows[0];
-  if (user.disabled) throw new AppError(403, "Tài khoản bị vô hiệu hóa");
+  if (user.disabled) {
+    console.warn("Lark access denied", { reason: "account_disabled" });
+    throw new LarkAccessDenied("account_disabled");
+  }
   await regenerate(req);
   req.session.userId = user.id;
   req.session.csrf = randomBytes(32).toString("hex");
@@ -304,15 +329,17 @@ auth.use((error: unknown, req: Request, res: Response, next: NextFunction) => {
     return next(error);
   const status = error instanceof AppError ? error.status : 500;
   const code =
-    status === 503
-      ? "not_configured"
-      : status === 403
-        ? "access_denied"
-        : status === 401
-          ? "login_expired"
-          : status === 502
-            ? "provider_error"
-            : "login_failed";
+    error instanceof LarkAccessDenied
+      ? error.reason
+      : status === 503
+        ? "not_configured"
+        : status === 403
+          ? "access_denied"
+          : status === 401
+            ? "login_expired"
+            : status === 502
+              ? "provider_error"
+              : "login_failed";
   const destination = new URL("/", publicOrigin());
   destination.searchParams.set("login_error", code);
   res.redirect(303, destination.href);

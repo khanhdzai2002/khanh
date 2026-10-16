@@ -107,7 +107,7 @@ Dùng môi trường staging hoặc dữ liệu tổng hợp được phép, kh�
 - Lệnh 1.000, nhận 300 rồi 450 → còn 250, tiến độ 75%; không nhận vượt. Không tự cộng tồn. Sửa giữ số nhận/audit; xóa mềm rồi khôi phục.
 - Reload, logout/login, bấm **Redeploy** web service với cùng Postgres rồi kiểm tra dữ liệu test và lịch sử vẫn còn. Không xóa database/volume.
 - Thử import file tổng hợp CSV/XLSX, combo cần đối soát không quy về một SKU; tồn/vòng đời không bị ghi đè khi chuyển số bán.
-- Chỉ đánh dấu hoàn thành khi các kiểm tra ngoài và OAuth thật đã đạt. 84 tests cục bộ không thay thế nghiệm thu này.
+- Chỉ đánh dấu hoàn thành khi các kiểm tra ngoài và OAuth thật đã đạt. 88 tests cục bộ không thay thế nghiệm thu này.
 
 ## Backup và giám sát
 
@@ -137,3 +137,12 @@ Trang Railway/docs và JSON schema trả 403 qua mạng của workspace trong ph
 ## Khi trang đăng nhập báo provider error
 
 Sau khi deployment mới hoạt động, đăng nhập lại đúng một lần, mở Deploy Logs và tìm `Lark OAuth failed`. Ghi nhận stage, httpStatus, providerCode, oauthError, transportCode; các trường đã được lọc để không chứa bí mật. `token_exchange` lỗi ở bước đổi code, `user_info` lỗi khi đọc danh tính/quyền. Không suy từ thông báo frontend rằng chắc chắn Secret sai; đối chiếu mã lỗi cụ thể. Không dán cả request/response OAuth hoặc biến môi trường để hỗ trợ.
+
+## Khi OAuth thành công nhưng tài khoản bị từ chối
+
+Bản mới tách rõ hai lý do:
+
+- `tenant_mismatch`: đăng nhập đúng tổ chức công ty. Trong Lark API Explorer chọn đúng app và tài khoản công ty, gọi User Info để lấy **data.tenant_key**, rồi nhập trực tiếp vào Railway → khanh → Variables → LARK_TENANT_KEY và Deploy. Không dùng App ID, Enterprise ID/display_id hoặc tenant_access_token. Không lấy tenant của người dùng ngoài công ty để mở truy cập. Khoảng trắng đầu/cuối được trim, dấu nháy và khoảng trắng bên trong phải sửa lại.
+- `account_disabled`: Administrator kiểm tra trạng thái user trong COMS-FLOW và chỉ mở lại khi được phép. Backend không tự mở khóa hoặc nâng quyền.
+
+Có thể xác nhận reason trong Deploy Logs bằng `Lark access denied`. Fingerprint trong log chỉ phục vụ so sánh, **không phải tenant key để nhập cấu hình**. Không cần đổi Secret hoặc callback khi lỗi đã ở bước tenant check.

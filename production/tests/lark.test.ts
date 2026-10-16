@@ -7,7 +7,7 @@ import {
   expect,
   vi,
 } from "vitest";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { pool } from "../server/db";
 import { migrate } from "../server/migrate";
 const mock = vi.hoisted(() => ({ token: vi.fn(), info: vi.fn() }));
@@ -291,6 +291,84 @@ it("callback mock từ tenant khác bị từ chối", async () => {
     { headers: { Cookie: l.cookie }, redirect: "manual" },
   );
   expect(r.status).toBe(403);
+  expect((await r.json()).message).toContain("LARK_TENANT_KEY");
+  expect(
+    (
+      await pool.query("SELECT id FROM users WHERE open_id=$1", [
+        "wrong-tenant-person",
+      ])
+    ).rowCount,
+  ).toBe(0);
+  const fresh = await login();
+  const browserResponse = await fetch(
+    base + "/auth/callback?state=" + fresh.state + "&code=synthetic-new",
+    {
+      headers: { Cookie: fresh.cookie, Accept: "text/html" },
+      redirect: "manual",
+    },
+  );
+  expect(browserResponse.status).toBe(303);
+  expect(
+    new URL(browserResponse.headers.get("location")!).searchParams.get(
+      "login_error",
+    ),
+  ).toBe("tenant_mismatch");
+  expect(process.env.LARK_TENANT_KEY).toBe("test-tenant");
+});
+it("tenant key dư khoảng trắng đăng nhập đúng tenant mà không tự nâng quyền", async () => {
+  config();
+  process.env.LARK_TENANT_KEY = " \n test-tenant \t";
+  acceptLark();
+  const l = await login();
+  const response = await fetch(
+    base + "/auth/callback?state=" + l.state + "&code=synthetic",
+    {
+      headers: { Cookie: l.cookie },
+      redirect: "manual",
+    },
+  );
+  expect(response.status).toBe(302);
+  const cookie = response.headers.get("set-cookie")!.split(";")[0];
+  const me = await (
+    await fetch(base + "/api/me", { headers: { Cookie: cookie } })
+  ).json();
+  expect(me.user.role).toBe("Viewer");
+});
+it("tài khoản bị khóa không được đăng nhập và có lý do riêng với tenant mismatch", async () => {
+  config();
+  acceptLark();
+  const openId = "synthetic-disabled-" + randomUUID();
+  await pool.query(
+    "INSERT INTO users(id,tenant_key,open_id,name,disabled) VALUES($1,$2,$3,$4,true)",
+    [randomUUID(), "test-tenant", openId, "Synthetic disabled person"],
+  );
+  mock.info.mockResolvedValue({
+    code: 0,
+    data: {
+      open_id: openId,
+      tenant_key: "test-tenant",
+      name: "Synthetic disabled person",
+    },
+  });
+  const l = await login();
+  const response = await fetch(
+    base + "/auth/callback?state=" + l.state + "&code=synthetic",
+    {
+      headers: { Cookie: l.cookie, Accept: "text/html" },
+      redirect: "manual",
+    },
+  );
+  expect(response.status).toBe(303);
+  expect(
+    new URL(response.headers.get("location")!).searchParams.get("login_error"),
+  ).toBe("account_disabled");
+  expect(
+    (await fetch(base + "/api/me", { headers: { Cookie: l.cookie } })).status,
+  ).toBe(401);
+  expect(
+    (await pool.query("SELECT disabled FROM users WHERE open_id=$1", [openId]))
+      .rows[0].disabled,
+  ).toBe(true);
 });
 it("production từ chối DEV_AUTH", () => {
   process.env.NODE_ENV = "production";

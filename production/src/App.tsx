@@ -63,6 +63,10 @@ export default function App() {
           "Backend chưa đủ cấu hình Lark. Hãy bổ sung biến môi trường theo hướng dẫn kết nối.",
         access_denied:
           "Tài khoản không thuộc tổ chức được phép hoặc đã bị khóa.",
+        tenant_mismatch:
+          "Tổ chức Lark không khớp cấu hình. Hãy dùng tài khoản thuộc đúng công ty; quản trị viên cần kiểm tra LARK_TENANT_KEY trong Railway → khanh → Variables bằng data.tenant_key của tổ chức công ty.",
+        account_disabled:
+          "Tài khoản đã bị vô hiệu hóa trong COMS-FLOW. Liên hệ Administrator để kiểm tra và mở lại nếu được phép.",
         login_expired:
           "Phiên đăng nhập đã hết hạn, đã dùng hoặc bạn chưa chấp thuận đăng nhập. Hãy thử lại.",
         provider_error:

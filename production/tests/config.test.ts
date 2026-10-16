@@ -4,13 +4,29 @@ import {
   callbackUrl,
   originAllowed,
   larkStatus,
+  configuredTenantKey,
 } from "../server/config";
+const originalTenantKey = process.env.LARK_TENANT_KEY;
 afterEach(() => {
   process.env.NODE_ENV = "test";
   process.env.PUBLIC_URL = "http://localhost:5174";
   delete process.env.LARK_REDIRECT_URI;
   delete process.env.APP_BASE_URL;
   delete process.env.RAILWAY_PUBLIC_DOMAIN;
+  if (originalTenantKey === undefined) delete process.env.LARK_TENANT_KEY;
+  else process.env.LARK_TENANT_KEY = originalTenantKey;
+});
+it("tenant key bỏ khoảng trắng đầu cuối, giữ nguyên chữ hoa thường", () => {
+  process.env.LARK_TENANT_KEY = " \n Synthetic-Tenant \t";
+  expect(configuredTenantKey()).toBe("Synthetic-Tenant");
+  expect(larkStatus().configurationError).toBeNull();
+});
+it("tenant key nhập kèm dấu nháy hoặc khoảng trắng bên trong có lỗi cấu hình rõ", () => {
+  for (const value of ['"synthetic-tenant"', "synthetic tenant"]) {
+    process.env.LARK_TENANT_KEY = value;
+    expect(larkStatus().configurationError).toContain("LARK_TENANT_KEY");
+    expect(larkStatus().configurationError).not.toContain(value);
+  }
 });
 it("Railway dùng APP_BASE_URL và callback cùng một public origin", () => {
   delete process.env.PUBLIC_URL;

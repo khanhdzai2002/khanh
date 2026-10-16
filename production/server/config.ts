@@ -52,6 +52,9 @@ export function callbackUrl() {
     throw Error("LARK_REDIRECT_URI phải bằng PUBLIC_URL + /auth/callback");
   return actual;
 }
+export function configuredTenantKey() {
+  return process.env.LARK_TENANT_KEY?.trim() || "";
+}
 export function larkStatus() {
   const missing = ["LARK_APP_ID", "LARK_APP_SECRET", "LARK_TENANT_KEY"].filter(
     (k) => !process.env[k]?.trim(),
@@ -59,6 +62,10 @@ export function larkStatus() {
   let configurationError: string | null = null;
   try {
     callbackUrl();
+    if (/[\s"']/.test(configuredTenantKey()))
+      throw Error(
+        "LARK_TENANT_KEY chứa dấu nháy hoặc khoảng trắng bên trong. Chỉ nhập giá trị tenant_key, không kèm dấu nháy.",
+      );
   } catch (e) {
     configurationError = (e as Error).message;
   }
