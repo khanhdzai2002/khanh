@@ -5,7 +5,7 @@
 - Node.js 24.19.0, npm 11.9.0, PostgreSQL 17 trong Docker; migrations 001–005.
 - `npm run build`: TypeScript và Vite build thành công. Tailwind biên dịch cục bộ; không cần CDN giao diện V9.
 - `npm ci` theo lockfile chạy lại thành công. Sau cài lại, đã khởi động lại Vite để làm mới dependency optimization (server đang chạy trước đó trả 504 cho cache cũ), rồi xác minh login/logout DEV và API trả 401 sau logout.
-- `npm test`: **107 tests passed, 9 files**, không có test skip. 23 tests domain, 33 tests integration PostgreSQL/HTTP và 18 tests Lark mock/security, 10 tests cấu hình origin/callback, 3 tests lọc log 2 tests SDK/web OAuth với transport giả lập 7 tests bootstrap Administrator và 11 tests quản lý thành viên.
+- `npm test`: **119 tests passed, 9 files**, không có test skip. 23 tests domain, 45 tests integration PostgreSQL/HTTP và 18 tests Lark mock/security, 10 tests cấu hình origin/callback, 3 tests lọc log 2 tests SDK/web OAuth với transport giả lập 7 tests bootstrap Administrator và 11 tests quản lý thành viên.
 - Công thức: một test đối chiếu 400 đầu vào với chính hàm calc V9 trích nguyên văn, kiểm tra need/sale/raw/target/cover/flag. Có test riêng ví dụ 60, làm tròn, ngày chờ opt-in, thiếu tồn, bất thường và bốn vòng đời.
 - Giao dịch: nhiều màu/size, nhận 300+450+250 từ 1.000; chặn vượt nhận; idempotency đồng thời; sửa sau nhận, không giảm dưới đã nhận, không đổi SKU/xóa dòng nhận; revision trước/sau; hai người sửa cùng version; xóa/khôi phục; hủy và reopen; giữ mã đã dùng; trigger bất biến.
 - Import: CSV và XLSX thật, preview chưa ghi báo cáo, confirm lặp, replace giữ nguồn cũ, append bỏ trùng và khóa khi thiếu line ID, bỏ ngày xuất chưa đủ, chuyển bán giữ tồn/inbound/vòng đời/test. JSON V9: phát hiện trùng/số nhận lệch, giữ tồn unknown, không seed sales cũ; nhập lệnh đã xóa có 2 biên nhận và nguồn editLog, nhập bản nháp giữ trạng thái.
@@ -87,3 +87,30 @@ Chromium với database tổng hợp `_test` riêng xác minh Administrator/Plan
 Chromium đã thao tác thêm thành viên tổng hợp, đổi Planner→Manager, khóa, mở lại thành Viewer, đọc lý do trong audit, xem ma trận, chặn hạ admin cuối cùng bằng 409, kiểm tra 390px không tràn; sau đổi role fixture sang Viewer chỉ còn hồ sơ của mình, API danh sách thành viên trả 403. Không có page errors. Lần smoke đầu dừng ở locator get_by_label của select; đã đổi sang combobox theo accessible name rồi chạy đầy đủ thành công. Dữ liệu và tài khoản đều ở database tổng hợp _test, không thay đổi tài khoản công ty trên Railway.
 
 Đã diễn tập khởi động production trên database thử trống: 5 migrations tự áp dụng, health 200, anonymous 401, restart không lặp SQL đã áp dụng và database không kết nối khiến app thoát trước listen với log đã lọc. Không cần thêm quyền đọc danh bạ Lark cho chức năng này.
+
+
+## Hồi quy thao tác V9 — 17/10/2026
+
+119 tests đạt, không skip. Build TypeScript/Vite được chạy lại sau bản sửa. [V9_ACTION_FIXES.md](V9_ACTION_FIXES.md) ghi từng vấn đề và hành vi mới.
+
+Chạy browser smoke trên dữ liệu tổng hợp riêng, theo thứ tự (không chạy đồng thời npm test):
+
+```bash
+# Terminal 1, thư mục production; script xóa và tạo lại dữ liệu _test.
+node --import tsx tests/serve-smoke.ts
+# Terminal 2, cùng thư mục.
+API_TARGET=http://127.0.0.1:3002 node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5175 --strictPort
+# Terminal 3; cần Python playwright và Chromium /usr/bin/chromium.
+python tests/browser-workflow.py
+python tests/browser-sales.py
+```
+
+Các script không cài Playwright vào runtime ứng dụng và không chạy trong npm test/CI mặc định. Không đổi địa chỉ sang deployment thật. Chạy lại từ đầu cần khởi động lại serve-smoke để tạo lại database thử.
+
+Browser core đã xác minh lập lệnh từ danh mục trống; thêm hai màu và size mới trong ma trận; lưu; nhận hai đợt; chặn nhận quá; sửa/thêm màu sau nhận; revision; tải Excel/CSV; gọi in và kiểm tra mã lệnh trong chế độ print; dialog lý do hủy/mở lại/xóa/khôi phục; nhập tồn/test; chọn SKU vào lệnh. Cố ý làm request refresh thất bại sau POST thành công: form đóng và cảnh báo tải lại, không nhân đôi lệnh. Kiểm tra lỗi mã trùng xuất hiện trong dialog và giữ giá trị nhập. Responsive 390px.
+
+Browser sales đã xác minh import CSV thực bằng file input, preview chưa ghi, xác nhận báo cáo, loại số đơn hủy và tách combo, nhập tồn/đang về/vòng đời ngay trong báo cáo, file export theo bộ lọc và có phân loại combo. Chuyển mã MIU66 đang lọc không tạo mã MIU37 ngoài bộ lọc; giữ stock=30, inbound=10, lifecycle=Tăng trưởng. Bán 10+30 trên hai ngày cho đề xuất 60 theo mặc định 5 ngày. Thêm SKU nhiều màu/size và đặt lại/lưu policy V9 được bấm qua UI.
+
+Đã chạy lại browser quản trị tài khoản sau sửa nhãn Field: thêm thành viên, đổi vai trò, khóa/mở, nhật ký, chặn hạ admin cuối, ma trận quyền, 390px và Viewer bị chặn danh sách API. Tất cả danh tính/dữ liệu đều tổng hợp trong _test.
+
+Trong quá trình phát triển có các lần smoke dừng do locator revision không duy nhất hoặc đọc session trước khi đăng nhập xong; đã sửa chờ/locator và chạy lại. Việc truy cập trường Nhà xưởng sau khi có datalist cũng phát hiện label chứa options; đã sửa liên kết label-control trong component Field và kiểm tra lại. Không coi các lần dừng đó là toàn bộ bài smoke đã đạt.

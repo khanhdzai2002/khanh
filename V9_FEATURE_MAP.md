@@ -1,7 +1,9 @@
 # COMS-FLOW — Bảng đối chiếu V9
 
-Triển khai hiện tại: [Railway và Custom App Lark 1.0.0 đã phát hành](production/docs/RAILWAY_DEPLOY.md). Người dùng đã mở được https://khanh-production.up.railway.app và xác nhận đăng nhập Lark bằng ảnh; vai trò hiện tại là Viewer. Chưa đổi công thức nghiệp vụ. Xem [đối chiếu nút thao tác và khởi tạo Administrator](production/docs/V9_BUTTON_AUDIT.md).
+Triển khai hiện tại: [Railway và Custom App Lark 1.0.0 đã phát hành](production/docs/RAILWAY_DEPLOY.md). Người dùng đã mở được https://khanh-production.up.railway.app và xác nhận đăng nhập Lark bằng ảnh; ảnh đăng nhập đầu tiên có vai trò Viewer. Chưa đổi công thức nghiệp vụ. Xem [đối chiếu nút thao tác và khởi tạo Administrator](production/docs/V9_BUTTON_AUDIT.md).
 
+
+Cập nhật thao tác 17/10/2026: [nguyên nhân, bản sửa và kiểm thử](production/docs/V9_ACTION_FIXES.md). Bổ sung thêm mã/màu/size ngay trong lệnh, sửa số ngay trong bảng bán, chuyển từng SKU hoặc nhóm đang lọc và lỗi lưu ngay trong dialog.
 
 ## Trạng thái và nguồn
 
@@ -28,7 +30,7 @@ Bảng dưới đây đối chiếu MASTER PROMPT với V9. Trạng thái phân 
 | Tab 04 | TikTok Excel/CSV, loại hủy/chưa thanh toán/hoàn trả, tính số lượng lẻ, top mã/màu, xu hướng, 2/7 ngày, khoảng tùy chọn | Pipeline import và phân tích bán hàng | `makeSalesSnapshot` dòng 724–736 |
 | Combo | Thiếu ánh xạ màu/size đưa vào đối soát riêng | Hàng nhập chưa phân giải, không tự gán SKU | Đã đối chiếu nguồn; xem bảng truy vết dưới |
 | Kỳ nhập bán hàng | Thay thế hoặc bổ sung, chống trùng đơn/dòng, nguồn file/người/kỳ/thời gian; bỏ ngày xuất chưa trọn vẹn | SalesImports, dữ liệu gốc và DailySales | V9 chỉ thay thế; bổ sung/chống trùng là yêu cầu mới |
-| Chuyển bán sang dự kiến | Giữ tồn, đang về, vòng đời; dữ liệu nhúng là lịch sử/mẫu | Lệnh chuyển có xem trước | Đã đối chiếu nguồn; xem bảng truy vết dưới |
+| Chuyển bán sang dự kiến | Giữ tồn, đang về, vòng đời; dữ liệu nhúng là lịch sử/mẫu | Chuyển từng SKU hoặc nhóm đang lọc có xác nhận | Đã đối chiếu nguồn; xem bảng truy vết dưới |
 | Tồn và đang về | Nguồn/ngày cập nhật, thiếu tồn khác 0, không trừ hai lần sản lượng đang về | InventorySnapshots và nguồn incoming rõ ràng | Đã đối chiếu nguồn; xem bảng truy vết dưới |
 | JSON V9 | Xem trước, phát hiện trùng, xác nhận trước ghi | Bộ chuyển đổi dữ liệu có staging | Đã xác định schema; xem inventory |
 | Lark Custom App | Icon CF, web app riêng, đăng nhập cá nhân, desktop/mobile, không chatbot/Base Extension | Xác thực backend, phiên người dùng và RBAC | Đã có mã và hướng dẫn; chưa xác minh tenant thật |

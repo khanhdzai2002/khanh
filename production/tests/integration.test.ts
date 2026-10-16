@@ -890,3 +890,412 @@ it("xuất XLSX lệnh là ma trận size, không phải HTML đổi đuôi", as
     await new Promise<void>((ok) => server.close(() => ok()));
   }
 });
+
+// Regressions from the V9 action audit: empty catalogue and filtered sales transfer.
+function composeDraft(code?: string) {
+  const newSkus = ["Cam", "Trắng"].flatMap((color) =>
+    ["S", "M", "L"].map((size) => ({
+      id: randomUUID(),
+      sku: "TEST-COMPOSE",
+      color,
+      size,
+    })),
+  );
+  return {
+    order: {
+      code,
+      time: "2026-10-17T10:00:00+07:00",
+      supplier: "SYNTHETIC Xưởng",
+      delivery: null,
+      requestedBy: actor.name,
+      notes: "SYNTHETIC ONLY",
+      status: "Nháp",
+      items: newSkus.map((s) => ({
+        variantId: s.id,
+        qty: 10,
+        priority: "THƯỜNG",
+      })),
+    },
+    newSkus,
+  };
+}
+const compose = async (raw: unknown, id?: string) => {
+  const { composeOrder } = await import("../server/order-composer");
+  return tx((db) => composeOrder(db, actor, raw, id));
+};
+describe("V9 thao tác lập lệnh và lọc bán hàng", () => {
+  it("danh mục trống: thêm ngay nhiều màu/size, tồn chưa biết, không giả định đã gửi", async () => {
+    const o = await compose(composeDraft());
+    expect(o.items).toHaveLength(6);
+    expect(totals(o)).toMatchObject({
+      placed: 60,
+      received: 0,
+      pending: 60,
+      status: "Nháp",
+    });
+    expect(
+      (await variants()).every(
+        (s) => s.stock === null && s.health === "Mở bán",
+      ),
+    ).toBe(true);
+  });
+  it("tái sử dụng SKU khác hoa/thường và giữ số bán/tồn/vòng đời", async () => {
+    const id = await tx((db) =>
+      saveSku(db, actor, {
+        sku: "TEST-COMPOSE",
+        color: "CAM",
+        size: "S",
+        stock: 35,
+        inbound: 12,
+        health: "Tăng trưởng",
+        day1: 20,
+      }),
+    );
+    const o = await compose(composeDraft());
+    expect(o.items.some((i) => i.variantId === id)).toBe(true);
+    expect(await variants()).toHaveLength(6);
+    expect((await variants()).find((v) => v.id === id)).toMatchObject({
+      stock: 35,
+      inbound: 12,
+      day1: 20,
+      health: "Tăng trưởng",
+    });
+  });
+  it("lỗi mã trùng rollback cả SKU nháp và audit", async () => {
+    await compose(composeDraft("SYNTHETIC-CODE"));
+    const d = composeDraft("SYNTHETIC-CODE");
+    d.newSkus.forEach((s) => (s.sku = "TEST-ROLLBACK"));
+    const before = (
+      await pool.query("SELECT count(*)::int AS n FROM activity_logs")
+    ).rows;
+    await expect(compose(d)).rejects.toBeTruthy();
+    expect((await variants()).some((s) => s.sku === "TEST-ROLLBACK")).toBe(
+      false,
+    );
+    expect(
+      (await pool.query("SELECT count(*)::int AS n FROM activity_logs")).rows,
+    ).toEqual(before);
+  });
+  it("chặn trùng mã–màu–size sau ánh xạ ID nháp, không để danh mục tạo dở", async () => {
+    const d = composeDraft();
+    d.newSkus[1] = { ...d.newSkus[0], id: d.newSkus[1].id };
+    await expect(compose(d)).rejects.toThrow("trùng");
+    expect(await variants()).toHaveLength(0);
+  });
+  it("chặn giả mạo danh mục đã lưu và SKU nháp không thuộc lệnh", async () => {
+    const o = await compose(composeDraft());
+    const d = composeDraft();
+    d.newSkus[0].id = o.items[0].variantId as ReturnType<typeof randomUUID>;
+    d.order.items[0].variantId = o.items[0].variantId as ReturnType<
+      typeof randomUUID
+    >;
+    await expect(compose(d)).rejects.toThrow("định danh SKU");
+    const unused = composeDraft();
+    unused.newSkus.push({
+      id: randomUUID(),
+      sku: "TEST-UNUSED",
+      color: "Cam",
+      size: "XS",
+    });
+    await expect(compose(unused)).rejects.toThrow("không có trong lệnh");
+  });
+  it("sửa sau nhận một phần: thêm mã/màu mới, giữ biên nhận và ghi lý do", async () => {
+    let o = await compose(composeDraft());
+    const line = o.items[0];
+    await receipt(o, 3);
+    o = await loadOrder(pool, o.id);
+    const v = { id: randomUUID(), sku: "TEST-NEW", color: "Đen", size: "XL" };
+    const changed = await compose(
+      {
+        order: {
+          ...input(o),
+          items: [
+            ...input(o).items,
+            { variantId: v.id, qty: 7, priority: "CẤP BÁCH" },
+          ],
+        },
+        newSkus: [v],
+        expectedVersion: o.version,
+        reason: "SYNTHETIC thêm dòng",
+      },
+      o.id,
+    );
+    expect(changed.items.find((i) => i.id === line.id)?.received).toBe(3);
+    expect(changed.items).toHaveLength(7);
+    expect(
+      (await pool.query("SELECT count(*)::int AS n FROM production_receipts"))
+        .rows[0].n,
+    ).toBe(1);
+    expect(
+      (await pool.query("SELECT reason FROM production_order_revisions"))
+        .rows[0].reason,
+    ).toBe("SYNTHETIC thêm dòng");
+    const invalid = input(changed);
+    invalid.items = invalid.items.filter((i: any) => i.id !== line.id);
+    await expect(
+      compose(
+        {
+          order: invalid,
+          newSkus: [],
+          expectedVersion: changed.version,
+          reason: "SYNTHETIC xóa sai",
+        },
+        o.id,
+      ),
+    ).rejects.toThrow("xóa dòng đã nhận");
+  });
+  it("lệnh hủy phải khôi phục trước khi thêm SKU; lỗi không tạo danh mục dở", async () => {
+    let o = await compose(composeDraft());
+    await tx((db) =>
+      orderAction(db, actor, o.id, "cancel", {
+        expectedVersion: o.version,
+        reason: "SYNTHETIC hủy",
+      }),
+    );
+    o = await loadOrder(pool, o.id);
+    const v = {
+      id: randomUUID(),
+      sku: "TEST-REOPEN",
+      color: "Đen",
+      size: "XL",
+    };
+    const raw = {
+      order: {
+        ...input(o),
+        items: [
+          ...input(o).items,
+          { variantId: v.id, qty: 7, priority: "THƯỜNG" },
+        ],
+      },
+      newSkus: [v],
+      expectedVersion: o.version,
+      reason: "SYNTHETIC sửa hủy",
+    };
+    await expect(compose(raw, o.id)).rejects.toThrow("khôi phục");
+    expect((await variants()).some((s) => s.sku === v.sku)).toBe(false);
+    expect((await compose({ ...raw, reopen: true }, o.id)).cancelled).toBe(
+      false,
+    );
+  });
+  it("hai người sửa cùng phiên bản chỉ một người thành công", async () => {
+    const o = await compose(composeDraft());
+    const raw = {
+      order: input(o),
+      newSkus: [],
+      expectedVersion: o.version,
+      reason: "SYNTHETIC đồng thời",
+    };
+    const results = await Promise.allSettled([
+      compose(raw, o.id),
+      compose(raw, o.id),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((r) => r.status === "rejected")).toHaveLength(1);
+  });
+  it("sync chỉ SKU đang chọn, giữ các SKU khác và tồn/vòng đời/test hiện có", async () => {
+    const csv =
+      'Order ID,Order Line ID,Order Status,Product Name,Variation,Quantity,Created Time\nSYNTHETIC-A,LA,Completed,Áo MIU66,"Trắng phối đen, M",10,2026-10-14 10:00:00\nSYNTHETIC-B,LB,Completed,Áo MIU37,"Đen, S",12,2026-10-14 10:00:00';
+    const p = await tx((db) => previewSales(db, actor, upload("replace", csv)));
+    expect(p.errors).toEqual([]);
+    await tx((db) => confirmSales(db, actor, p.id));
+    const report = await salesReport(pool);
+    expect(report.variants).toHaveLength(2);
+    const selected = report.variants.find((r) => r.sku === "MIU66")!;
+    const id = await tx((db) =>
+      saveSku(db, actor, {
+        sku: selected.sku,
+        color: selected.color.toUpperCase(),
+        size: selected.size,
+        stock: 35,
+        inbound: 12,
+        health: "Mở bán",
+        pilotQty: 7,
+      }),
+    );
+    expect(await tx((db) => syncSales(db, actor, "7", [selected]))).toEqual({
+      count: 1,
+    });
+    expect(await variants()).toHaveLength(1);
+    expect((await variants())[0]).toMatchObject({
+      id,
+      stock: 35,
+      inbound: 12,
+      health: "Mở bán",
+      pilotQty: 7,
+      abnormal: true,
+    });
+    await expect(tx((db) => syncSales(db, actor, "2", []))).rejects.toThrow(
+      "Chọn SKU",
+    );
+    await expect(
+      tx((db) =>
+        syncSales(db, actor, "2", [
+          { sku: "UNKNOWN", color: "Cam", size: "M" },
+        ]),
+      ),
+    ).rejects.toThrow("Chọn SKU");
+  });
+});
+
+it("API compose giữ RBAC/CSRF, export lệnh theo bộ lọc và lỗi không làm lộ dữ liệu", async () => {
+  const server = makeApp().listen(0, "127.0.0.1");
+  await new Promise<void>((ok) => server.once("listening", ok));
+  const base = `http://127.0.0.1:${(server.address() as any).port}`;
+  const origin = process.env.PUBLIC_URL!;
+  try {
+    expect(
+      (
+        await fetch(base + "/api/orders/compose", {
+          method: "POST",
+          headers: { Origin: origin, "Content-Type": "application/json" },
+          body: JSON.stringify(composeDraft()),
+        })
+      ).status,
+    ).toBe(401);
+    const login = await fetch(base + "/auth/dev", {
+      method: "POST",
+      headers: { Origin: origin },
+    });
+    const cookie = login.headers.get("set-cookie")!.split(";")[0];
+    const me = await (
+      await fetch(base + "/api/me", { headers: { Cookie: cookie } })
+    ).json();
+    const post = (
+      path: string,
+      raw: unknown,
+      csrf = me.csrf,
+      method = "POST",
+    ) =>
+      fetch(base + path, {
+        method,
+        headers: {
+          Origin: origin,
+          Cookie: cookie,
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrf,
+        },
+        body: JSON.stringify(raw),
+      });
+    expect(
+      (await post("/api/orders/compose", composeDraft(), "bad-csrf")).status,
+    ).toBe(403);
+    const created = await post(
+      "/api/orders/compose",
+      composeDraft("SYNTHETIC-HTTP-ONE"),
+    );
+    expect(created.status).toBe(201);
+    const o = await created.json();
+    expect(
+      (
+        await post(
+          `/api/orders/${o.id}/compose`,
+          {
+            order: input(o),
+            newSkus: [],
+            expectedVersion: o.version,
+            reason: "SYNTHETIC API edit",
+          },
+          me.csrf,
+          "PUT",
+        )
+      ).status,
+    ).toBe(200);
+    expect(
+      (await post("/api/orders/compose", composeDraft("SYNTHETIC-HTTP-TWO")))
+        .status,
+    ).toBe(201);
+    const csv = await (
+      await fetch(base + "/api/export/orders?search=SYNTHETIC-HTTP-ONE", {
+        headers: { Cookie: cookie },
+      })
+    ).text();
+    expect(csv).toContain("SYNTHETIC-HTTP-ONE");
+    expect(csv).not.toContain("SYNTHETIC-HTTP-TWO");
+    const done = await (
+      await fetch(base + "/api/export/orders?filter=done", {
+        headers: { Cookie: cookie },
+      })
+    ).text();
+    expect(done).not.toContain("SYNTHETIC-HTTP-ONE");
+    for (const role of ["Viewer", "Warehouse Operator", "Manager"]) {
+      await pool.query("UPDATE users SET role=$1 WHERE id=$2", [
+        role,
+        me.user.id,
+      ]);
+      expect((await post("/api/orders/compose", composeDraft())).status).toBe(
+        403,
+      );
+      expect(
+        (await post(`/api/orders/${o.id}/compose`, {}, me.csrf, "PUT")).status,
+      ).toBe(403);
+    }
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((ok) => server.close(() => ok()));
+  }
+});
+
+it("hai người tạo lệnh mới cùng danh mục: không trùng SKU và không trùng mã tự sinh", async () => {
+  const [a, b] = await Promise.all([
+    compose(composeDraft()),
+    compose(composeDraft()),
+  ]);
+  expect(a.code).not.toBe(b.code);
+  expect(await variants()).toHaveLength(6);
+  expect(new Set([...a.items, ...b.items].map((i) => i.variantId)).size).toBe(
+    6,
+  );
+});
+
+it("CSV bán hàng theo mã/kỳ giữ công thức, combo có phân loại, chặn khoảng ngày ngược", async () => {
+  const p = await tx((db) =>
+    previewSales(
+      db,
+      actor,
+      upload(
+        "replace",
+        'Order ID,Order Line ID,Order Status,Product Name,Variation,Quantity,Created Time\nSYNTHETIC-X,EX,Completed,Áo MIU66,"Trắng phối đen, M",10,2026-10-14 10:00:00\nSYNTHETIC-Y,EY,Completed,Áo MIU37,"Đen, S",12,2026-10-14 10:00:00\nSYNTHETIC-Z,EZ,Completed,Áo MIU66,"COMBO 2 ÁO, M",3,2026-10-14 10:00:00',
+      ),
+    ),
+  );
+  await tx((db) => confirmSales(db, actor, p.id));
+  const server = makeApp().listen(0, "127.0.0.1");
+  await new Promise<void>((ok) => server.once("listening", ok));
+  const base = `http://127.0.0.1:${(server.address() as any).port}`;
+  try {
+    const login = await fetch(base + "/auth/dev", {
+      method: "POST",
+      headers: { Origin: process.env.PUBLIC_URL! },
+    });
+    const headers = { Cookie: login.headers.get("set-cookie")!.split(";")[0] };
+    const csv = await (
+      await fetch(
+        base + "/api/export/sales?sku=MIU66&from=2026-10-14&to=2026-10-14",
+        { headers },
+      )
+    ).text();
+    expect(csv).toContain("MIU66");
+    expect(csv).not.toContain("MIU37");
+    expect(csv).toContain("TB/ngày 2 ngày");
+    const combo = await (
+      await fetch(base + "/api/export/combos?sku=MIU66", { headers })
+    ).text();
+    expect(combo).toContain("COMBO 2 ÁO");
+    const empty = await (
+      await fetch(base + "/api/export/sales?from=2026-10-15&to=2026-10-15", {
+        headers,
+      })
+    ).text();
+    expect(empty).not.toContain("MIU66");
+    expect(
+      (
+        await fetch(base + "/api/export/sales?from=2026-10-15&to=2026-10-14", {
+          headers,
+        })
+      ).status,
+    ).toBe(400);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((ok) => server.close(() => ok()));
+  }
+});

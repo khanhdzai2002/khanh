@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Plus,
   Download,
@@ -11,9 +11,9 @@ import {
 } from "lucide-react";
 import {
   forecast,
+  defaultPolicy,
   stages,
   sizes,
-  skuSchema,
   type Variant,
   type Policy,
 } from "../shared/domain";
@@ -57,7 +57,7 @@ export function Planning({
   );
   async function update(s: Variant, patch: Partial<Variant>) {
     const { id, version, ...body } = s;
-    await run(() =>
+    return run(() =>
       send(
         "/api/skus/" + id,
         { expectedVersion: version, sku: { ...body, ...patch } },
@@ -141,6 +141,9 @@ export function Planning({
           <a className="button" href="/api/export/skus">
             <Download size={15} />
             CSV
+          </a>
+          <a className="button" href="/mau-nhap-ke-hoach.csv" download>
+            File mẫu CSV
           </a>
           {writable && (
             <label className="button">
@@ -335,9 +338,11 @@ export function Planning({
                           value={s.stock}
                           disabled={!writable || busy}
                           nullable
+                          integer
                           save={(stock) =>
                             update(s, {
                               stock,
+                              inventorySource: "Nhập thủ công",
                               inventoryAt: new Date().toISOString(),
                             })
                           }
@@ -358,6 +363,7 @@ export function Planning({
                         <NumberInput
                           label={"Đang về " + s.id}
                           value={s.inbound}
+                          integer
                           disabled={!writable || busy}
                           save={(v) => update(s, { inbound: v ?? 0 })}
                         />
@@ -389,6 +395,8 @@ export function Planning({
                           <NumberInput
                             label={"SL test " + s.id}
                             value={s.pilotQty}
+                            integer
+                            maximum={100000}
                             disabled={!writable || busy}
                             save={(v) => update(s, { pilotQty: v ?? 0 })}
                           />
@@ -539,9 +547,18 @@ export function Planning({
               chờ. SL test Mở bán không trừ tồn và không làm tròn bội.
             </Notice>
             {writable && (
-              <button className="primary" disabled={busy}>
-                Lưu chính sách
-              </button>
+              <div className="actions">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setPolicy({ ...defaultPolicy })}
+                >
+                  Khôi phục mặc định V9
+                </button>
+                <button className="primary" disabled={busy}>
+                  Lưu chính sách
+                </button>
+              </div>
             )}
           </form>
         </Modal>
@@ -647,38 +664,75 @@ function EditSku({
     </Modal>
   );
 }
-function NumberInput({
+export function NumberInput({
   value,
   save,
   label,
   disabled,
   nullable = false,
+  integer = false,
+  maximum = 1e9,
 }: {
   value: number | null;
-  save: (v: number | null) => Promise<unknown>;
+  save: (v: number | null) => Promise<boolean>;
   label: string;
   disabled: boolean;
   nullable?: boolean;
+  integer?: boolean;
+  maximum?: number;
 }) {
+  const [draft, setDraft] = useState(String(value ?? ""));
+  const [error, setError] = useState("");
+  useEffect(() => {
+    setDraft(String(value ?? ""));
+    setError("");
+  }, [value]);
   return (
-    <input
-      className="number-input"
-      aria-label={label}
-      type="number"
-      min="0"
-      step="any"
-      disabled={disabled}
-      defaultValue={value ?? ""}
-      placeholder={nullable ? "Nhập tồn" : "0"}
-      onBlur={(e) => {
-        const v =
-          e.target.value === "" && nullable ? null : Number(e.target.value);
-        if (v !== value) void save(v);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") e.currentTarget.blur();
-      }}
-    />
+    <>
+      <input
+        className="number-input"
+        aria-label={label}
+        type="number"
+        min="0"
+        step={integer ? "1" : "any"}
+        max={maximum}
+        disabled={disabled}
+        value={draft}
+        placeholder={nullable ? "Nhập tồn" : "0"}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          setError("");
+        }}
+        onBlur={async () => {
+          const v = draft === "" && nullable ? null : Number(draft);
+          if (
+            v !== null &&
+            (!Number.isFinite(v) ||
+              v < 0 ||
+              v > maximum ||
+              (integer && !Number.isInteger(v)))
+          ) {
+            setError(
+              `Nhập ${integer ? "số nguyên" : "số"} từ 0 đến ${maximum}. Chưa lưu thay đổi.`,
+            );
+            setDraft(String(value ?? ""));
+            return;
+          }
+          if (v !== value && !(await save(v))) setDraft(String(value ?? ""));
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
+        }}
+      />
+      {error && (
+        <small className="text-error" role="alert">
+          {error}
+        </small>
+      )}
+    </>
   );
 }
 function AddSku({
@@ -699,18 +753,21 @@ function AddSku({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          const rows = colors
-            .split("\n")
-            .map((s) => s.trim())
-            .filter(Boolean)
-            .flatMap((color) =>
-              chosen.map((size) => skuSchema.parse({ sku, name, color, size })),
+          void run(() => {
+            const rows = [
+              ...new Set(
+                colors
+                  .split("\n")
+                  .map((s) => s.trim())
+                  .filter(Boolean),
+              ),
+            ].flatMap((color) =>
+              chosen.map((size) => ({ sku, name, color, size })),
             );
-          void run(() => send("/api/skus/batch", rows), "Đã thêm SKU").then(
-            (ok) => {
-              if (ok) onClose();
-            },
-          );
+            return send("/api/skus/batch", rows);
+          }, "Đã thêm SKU").then((ok) => {
+            if (ok) onClose();
+          });
         }}
       >
         <div className="form-grid">

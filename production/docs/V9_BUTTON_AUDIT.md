@@ -18,7 +18,7 @@ File V9 gửi lại có SHA-256 `5e468146bd3ed292b7e4494a1276e4572d08161743a5f83
 | CSV/XLSX, bản in theo chức năng hiện có | Các bảng và chi tiết lệnh | Xem dữ liệu theo quyền; thao tác ghi vẫn bị chặn |
 | Cấp quyền nhân viên (mới so với V9) | Cấu hình & dữ liệu → Phân quyền | Administrator |
 
-Khác biệt có chủ đích: SKU phải được tạo trong Dự kiến sản xuất trước khi chọn vào lệnh để giữ danh mục và khóa ngoại; không seed dữ liệu bán nhúng V9. Backup toàn database dùng công cụ PostgreSQL thay vì localStorage. Lark Base chỉ đọc preview, chưa sync; workflow duyệt Manager chưa triển khai. Không tuyên bố đã gửi lệnh tới xưởng khi chỉ đổi trạng thái nội bộ.
+Cập nhật 17/10/2026: đã bỏ rào cản phải tạo SKU ở trang khác. Có thể nhập mã/màu/size ngay khi tạo hoặc sửa lệnh; API compose lưu SKU và lệnh trong cùng transaction, giữ khóa ngoại và rollback khi lỗi. Không seed dữ liệu bán nhúng V9. Xem [bản rà soát và sửa thao tác](V9_ACTION_FIXES.md). Backup toàn database dùng công cụ PostgreSQL thay vì localStorage. Lark Base chỉ đọc preview, chưa sync; workflow duyệt Manager chưa triển khai. Không tuyên bố đã gửi lệnh tới xưởng khi chỉ đổi trạng thái nội bộ.
 
 ## Khởi tạo Administrator đầu tiên không cần SQL thủ công
 

@@ -1389,4 +1389,45 @@ summary {
   z-index: 90;
 }
 
-.account-identifier { display:block; overflow-wrap:anywhere; max-width:340px; margin-top:6px; }
+.account-identifier {
+  display: block;
+  overflow-wrap: anywhere;
+  max-width: 340px;
+  margin-top: 6px;
+}
+
+/* Keep validation beside the active form, including inside long order dialogs. */
+.dialog-feedback,
+.form-error {
+  color: #ad3529;
+  background: #fff0ed;
+  border: 1px solid #f2c1b8;
+  border-radius: 7px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  font-size: 12px;
+  white-space: normal;
+}
+.dialog-feedback {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.add-box fieldset {
+  border: 0;
+  padding: 0;
+  margin: 16px 0 8px;
+  min-width: 0;
+}
+.add-box button[aria-pressed="true"] {
+  background: #fff1e6;
+  border-color: #ee741f;
+  color: #af4f10;
+}
+.modal-actions {
+  position: sticky;
+  bottom: -24px;
+  background: #fff;
+  padding: 12px 0;
+  z-index: 4;
+}

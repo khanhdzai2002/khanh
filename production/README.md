@@ -66,3 +66,6 @@ Dashboard từ dữ liệu tập trung; CRUD SKU/nhiều màu-size/sửa bảng/
 - Nhập tồn trong Dự kiến sản xuất; không tự cập nhật tồn khi nhận hàng. Không có đối soát kho tự động.
 - Chưa có TikTok Shop API, job queue, phân trang server cho mọi danh sách hoặc benchmark dữ liệu doanh nghiệp lớn. Giới hạn file 10 MB/100.000 dòng. Xem giới hạn triển khai trong DEPLOYMENT.md.
 - Chưa xác minh deploy Docker/HTTPS, publication Lark hoặc khôi phục snapshot ở cloud task mới. Không gọi hệ thống production-ready khi các bước này còn thiếu.
+
+
+Đợt rà soát thao tác V9 ngày 17/10/2026: xem [V9_ACTION_FIXES.md](docs/V9_ACTION_FIXES.md) để biết nguyên nhân nút lưu lệnh bị khóa, cách thêm mã/màu/size ngay trong lệnh và kết quả kiểm thử luồng thao tác.

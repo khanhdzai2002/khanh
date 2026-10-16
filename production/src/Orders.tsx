@@ -16,6 +16,8 @@ import {
   priorities,
   statuses,
   forecast,
+  skuSchema,
+  orderSchema,
   totals,
   can,
   type ProductionOrder,
@@ -55,6 +57,12 @@ export function Orders({
     [filter, setFilter] = useState(""),
     [editing, setEditing] = useState<ProductionOrder | "new" | null>(null),
     [selected, setSelected] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<{
+    order: ProductionOrder;
+    name: string;
+    label: string;
+    returnToDetail: boolean;
+  } | null>(null);
   const archived = page === "archived";
   useEffect(() => {
     if (seed.length && page === "orders") setEditing("new");
@@ -80,14 +88,13 @@ export function Orders({
     );
   const selectedOrder = data.orders.find((o) => o.id === selected);
   const action = async (o: ProductionOrder, name: string, label: string) => {
-    const reason = prompt(label + " — nhập lý do (ít nhất 3 ký tự)");
-    if (reason?.trim())
-      await run(() =>
-        send(`/api/orders/${o.id}/${name}`, {
-          expectedVersion: o.version,
-          reason,
-        }),
-      );
+    setPendingAction({
+      order: o,
+      name,
+      label,
+      returnToDetail: selected === o.id,
+    });
+    setSelected(null);
   };
   return (
     <>
@@ -163,7 +170,12 @@ export function Orders({
           <span className="spacer" />
           <a
             className="button"
-            href={"/api/export/" + (archived ? "archived" : "orders")}
+            href={
+              "/api/export/" +
+              (archived ? "archived" : "orders") +
+              "?" +
+              new URLSearchParams({ search, filter })
+            }
           >
             <Download size={16} />
             CSV
@@ -173,7 +185,8 @@ export function Orders({
             href={
               "/api/export/" +
               (archived ? "archived" : "orders") +
-              "?format=xlsx"
+              "?" +
+              new URLSearchParams({ search, filter, format: "xlsx" })
             }
           >
             Excel
@@ -322,6 +335,27 @@ export function Orders({
           }}
         />
       )}
+      {pendingAction && (
+        <OrderActionDialog
+          key={pendingAction.order.id + pendingAction.name}
+          request={pendingAction}
+          run={run}
+          busy={busy}
+          onClose={() => {
+            if (pendingAction.returnToDetail)
+              setSelected(pendingAction.order.id);
+            setPendingAction(null);
+          }}
+          onSaved={() => {
+            if (
+              pendingAction.returnToDetail &&
+              !["delete", "restore"].includes(pendingAction.name)
+            )
+              setSelected(pendingAction.order.id);
+            setPendingAction(null);
+          }}
+        />
+      )}
       {selectedOrder && (
         <OrderDetail
           order={selectedOrder}
@@ -337,6 +371,68 @@ export function Orders({
         />
       )}
     </>
+  );
+}
+function OrderActionDialog({
+  request,
+  run,
+  busy,
+  onClose,
+  onSaved,
+}: {
+  request: { order: ProductionOrder; name: string; label: string };
+  run: Run;
+  busy: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [reason, setReason] = useState("");
+  return (
+    <Modal title={request.label} onClose={onClose}>
+      <p>
+        <b>{request.order.code}</b> · {request.order.supplier}
+      </p>
+      <Notice>
+        {request.name === "delete"
+          ? "Xóa mềm giữ toàn bộ dòng hàng, biên nhận và nhật ký. Có thể khôi phục trong Lệnh đã xóa."
+          : request.name === "cancel"
+            ? "Chỉ hủy phần chưa nhận; số đã nhận và biên bản giao nhận được giữ nguyên."
+            : "Thao tác có kiểm tra phiên bản lệnh và ghi nhật ký người thực hiện."}
+      </Notice>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void run(
+            () =>
+              send(`/api/orders/${request.order.id}/${request.name}`, {
+                expectedVersion: request.order.version,
+                reason,
+              }),
+            "Đã cập nhật lệnh và lưu nhật ký",
+          ).then((ok) => {
+            if (ok) onSaved();
+          });
+        }}
+      >
+        <Field label="Lý do thao tác (bắt buộc)">
+          <textarea
+            required
+            minLength={3}
+            maxLength={450}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+          />
+        </Field>
+        <div className="modal-actions">
+          <button type="button" disabled={busy} onClick={onClose}>
+            Quay lại
+          </button>
+          <button className="primary" disabled={busy}>
+            Xác nhận thao tác
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 function OrderEditor({
@@ -380,6 +476,12 @@ function OrderEditor({
               : "THƯỜNG",
         })),
   });
+  const [draftSkus, setDraftSkus] = useState<Variant[]>([]);
+  const [manual, setManual] = useState(!data.skus.length);
+  const [newCode, setNewCode] = useState("");
+  const [newColors, setNewColors] = useState("");
+  const [validation, setValidation] = useState("");
+  const catalogue = [...data.skus, ...draftSkus];
   const [reason, setReason] = useState(""),
     [reopen, setReopen] = useState(false),
     [code, setCode] = useState(""),
@@ -390,7 +492,7 @@ function OrderEditor({
       L: 1,
     }),
     [priority, setPriority] = useState<(typeof priorities)[number]>("THƯỜNG");
-  const variants = new Map(data.skus.map((s) => [s.id, s]));
+  const variants = new Map(catalogue.map((s) => [s.id, s]));
   const groups = new Map<
     string,
     { sku: string; color: string; items: OrderInput["items"] }
@@ -408,32 +510,87 @@ function OrderEditor({
   const locked = (item: OrderInput["items"][number]) =>
     order?.items.find((i) => i.id === item.id)?.received || 0;
   const add = () => {
-    const list = [...form.items];
-    for (const color of colors)
+    setValidation("");
+    const sku = manual ? newCode.trim().toUpperCase() : code;
+    const chosenColors = manual
+      ? [
+          ...new Set(
+            newColors
+              .split("\n")
+              .map((s) => s.trim())
+              .filter(Boolean),
+          ),
+        ]
+      : colors;
+    if (!sku || !chosenColors.length) {
+      setValidation(
+        "Chọn mã và ít nhất một màu, hoặc nhập mã/màu trong mục thêm thủ công.",
+      );
+      return;
+    }
+    if (
+      sizes.some(
+        (s) =>
+          !Number.isInteger(quantities[s] || 0) ||
+          (quantities[s] || 0) < 0 ||
+          (quantities[s] || 0) > 1000000,
+      ) ||
+      !sizes.some((s) => (quantities[s] || 0) > 0)
+    ) {
+      setValidation(
+        "Nhập ít nhất một size có số lượng nguyên từ 1 đến 1.000.000; các size khác để 0.",
+      );
+      return;
+    }
+    const list = form.items.map((i) => ({ ...i }));
+    const created: Variant[] = [];
+    for (const color of chosenColors)
       for (const size of sizes) {
-        const variant = data.skus.find(
-          (s) => s.sku === code && s.color === color && s.size === size,
-        );
         const qty = quantities[size] || 0;
-        if (!variant || qty <= 0) continue;
+        if (!qty) continue;
+        let variant = [...catalogue, ...created].find(
+          (s) =>
+            s.sku.toUpperCase() === sku.toUpperCase() &&
+            s.color.toLowerCase() === color.toLowerCase() &&
+            s.size === size,
+        );
+        if (!variant) {
+          const parsed = skuSchema.safeParse({ sku, color, size });
+          if (!parsed.success) {
+            setValidation(
+              "Mã tối đa 90 ký tự, màu tối đa 200 ký tự; không được để trống.",
+            );
+            return;
+          }
+          variant = { ...parsed.data, id: crypto.randomUUID(), version: 1 };
+          created.push(variant);
+        }
         const old = list.find((i) => i.variantId === variant.id);
         if (old) {
+          if (old.qty + qty > 1000000) {
+            setValidation(
+              "Tổng số lượng của một SKU không được vượt 1.000.000.",
+            );
+            return;
+          }
           old.qty += qty;
+          if (priority === "CẤP BÁCH" || old.priority === "THƯỜNG")
+            old.priority = priority;
         } else list.push({ variantId: variant.id, qty, priority });
       }
+    setDraftSkus([...draftSkus, ...created]);
     setForm({ ...form, items: list });
+    setValidation("");
   };
   function sizeCell(
     group: { sku: string; color: string; items: OrderInput["items"] },
     size: string,
   ) {
-    const variant = data.skus.find(
+    const variant = catalogue.find(
         (v) =>
           v.sku === group.sku && v.color === group.color && v.size === size,
       ),
       item = group.items.find((i) => i.variantId === variant?.id);
-    if (!variant)
-      return <span title="Chưa có SKU size này trong danh mục">—</span>;
     return (
       <input
         type="number"
@@ -445,14 +602,22 @@ function OrderEditor({
         disabled={busy || (!!order?.cancelled && !reopen)}
         onChange={(e) => {
           const qty = Number(e.target.value);
-          let list = form.items.map((i) => ({ ...i }));
-          const old = list.find((i) => i.variantId === variant.id);
+          let chosen = variant;
+          if (!chosen && qty > 0) {
+            chosen = {
+              ...skuSchema.parse({ sku: group.sku, color: group.color, size }),
+              id: crypto.randomUUID(),
+              version: 1,
+            };
+            setDraftSkus([...draftSkus, chosen]);
+          }
+          if (!chosen) return;
+          const variantId = chosen.id;
+          const list = form.items.map((i) => ({ ...i }));
+          const old = list.find((i) => i.variantId === variantId);
           if (old) {
             old.qty = qty;
-            if (qty === 0 && !locked(old))
-              list = list.filter((i) => i.variantId !== variant.id);
-          } else if (qty > 0)
-            list.push({ variantId: variant.id, qty, priority: "THƯỜNG" });
+          } else if (qty > 0) list.push({ variantId, qty, priority: "THƯỜNG" });
           patch("items", list);
         }}
       />
@@ -467,20 +632,52 @@ function OrderEditor({
       <form
         onSubmit={(e) => {
           e.preventDefault();
+          setValidation("");
+          const submitted = {
+            ...form,
+            items: form.items.filter((i) => i.qty !== 0 || locked(i) > 0),
+          };
+          if (!submitted.items.length) {
+            setValidation(
+              "Lệnh chưa có sản phẩm. Thêm mã/màu và số lượng theo size ở phần bên dưới trước khi lưu.",
+            );
+            return;
+          }
+          const parsed = orderSchema.safeParse(submitted);
+          if (!parsed.success) {
+            setValidation(
+              "Kiểm tra mã lệnh, nhà xưởng, người đặt và số lượng nguyên từ 1 đến 1.000.000 trên từng SKU.",
+            );
+            return;
+          }
+          if (order && reason.trim().length < 3) {
+            setValidation("Nhập lý do chỉnh sửa ít nhất 3 ký tự.");
+            return;
+          }
+          if (form.items.some((i) => i.qty < locked(i))) {
+            setValidation(
+              "Số lượng đặt không được nhỏ hơn số đã nhận. Biên nhận cũ được giữ nguyên.",
+            );
+            return;
+          }
+          const newSkus = draftSkus
+            .filter((s) => parsed.data.items.some((i) => i.variantId === s.id))
+            .map(({ id, sku, color, size }) => ({ id, sku, color, size }));
           void run(
             () =>
-              order
-                ? send(
-                    "/api/orders/" + order.id,
-                    {
-                      expectedVersion: order.version,
-                      reason,
-                      reopen,
-                      order: form,
-                    },
-                    "PUT",
-                  )
-                : send("/api/orders", form),
+              send(
+                order
+                  ? `/api/orders/${order.id}/compose`
+                  : "/api/orders/compose",
+                {
+                  order: parsed.data,
+                  newSkus,
+                  ...(order
+                    ? { expectedVersion: order.version, reason, reopen }
+                    : {}),
+                },
+                order ? "PUT" : "POST",
+              ),
             order ? "Đã lưu chỉnh sửa và nhật ký" : "Đã lưu lệnh sản xuất",
           ).then((ok) => {
             if (ok) onClose();
@@ -576,6 +773,14 @@ function OrderEditor({
               </tr>
             </thead>
             <tbody>
+              {!groups.size && (
+                <tr>
+                  <td colSpan={11} className="muted">
+                    Lệnh chưa có sản phẩm. Thêm từ danh mục hoặc nhập mã/màu mới
+                    bên dưới.
+                  </td>
+                </tr>
+              )}
               {[...groups.entries()].map(([key, g]) => (
                 <tr key={key}>
                   <td className="product-code">{g.sku}</td>
@@ -589,6 +794,7 @@ function OrderEditor({
                   <td>
                     <select
                       aria-label={"Ưu tiên " + g.sku + " " + g.color}
+                      disabled={busy || (!!order?.cancelled && !reopen)}
                       value={
                         g.items.some((i) => i.priority === "CẤP BÁCH")
                           ? "CẤP BÁCH"
@@ -658,85 +864,162 @@ function OrderEditor({
           </small>
         )}
         <section className="add-box">
-          <h3>Thêm SKU từ danh mục / dòng thủ công</h3>
-          <div className="form-grid">
-            <Field label="Mã sản phẩm">
-              <select
-                value={code}
-                onChange={(e) => {
-                  setCode(e.target.value);
-                  setColors([]);
-                }}
-              >
-                <option value="">Chọn mã</option>
-                {[...new Set(data.skus.map((s) => s.sku))].map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Ưu tiên">
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as typeof priority)}
-              >
-                {priorities.map((p) => (
-                  <option key={p}>{p}</option>
-                ))}
-              </select>
-            </Field>
+          <h3>Thêm sản phẩm vào lệnh</h3>
+          <div className="actions">
+            <button
+              type="button"
+              disabled={busy}
+              aria-pressed={!manual}
+              onClick={() => {
+                setManual(false);
+                setValidation("");
+              }}
+            >
+              Chọn từ danh mục
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              aria-pressed={manual}
+              onClick={() => {
+                setManual(true);
+                setValidation("");
+              }}
+            >
+              Nhập mã / màu mới
+            </button>
           </div>
-          <div className="size-selector">
-            {[
-              ...new Set(
-                data.skus.filter((s) => s.sku === code).map((s) => s.color),
-              ),
-            ].map((c) => (
-              <label key={c}>
-                <input
-                  type="checkbox"
-                  checked={colors.includes(c)}
+          {!catalogue.length && (
+            <Notice>
+              Danh mục đang trống. Chọn “Nhập mã / màu mới” để thêm ngay trong
+              lệnh; không cần đóng cửa sổ.
+            </Notice>
+          )}
+          <fieldset disabled={busy || (!!order?.cancelled && !reopen)}>
+            <div className="form-grid">
+              {manual ? (
+                <>
+                  <Field label="Mã sản phẩm mới hoặc đã có">
+                    <input
+                      value={newCode}
+                      maxLength={90}
+                      onChange={(e) => setNewCode(e.target.value)}
+                      placeholder="MIU66"
+                    />
+                  </Field>
+                  <Field label="Màu / phối màu — mỗi màu một dòng">
+                    <textarea
+                      value={newColors}
+                      maxLength={4000}
+                      onChange={(e) => setNewColors(e.target.value)}
+                      placeholder="Trắng phối đen"
+                    />
+                  </Field>
+                </>
+              ) : (
+                <Field label="Mã sản phẩm">
+                  <select
+                    value={code}
+                    onChange={(e) => {
+                      setCode(e.target.value);
+                      const firstColor = catalogue.find(
+                        (s) => s.sku === e.target.value,
+                      )?.color;
+                      setColors(firstColor ? [firstColor] : []);
+                    }}
+                  >
+                    <option value="">Chọn mã</option>
+                    {[...new Set(catalogue.map((s) => s.sku))].map((s) => (
+                      <option key={s}>{s}</option>
+                    ))}
+                  </select>
+                </Field>
+              )}
+              <Field label="Ưu tiên">
+                <select
+                  value={priority}
                   onChange={(e) =>
-                    setColors(
-                      e.target.checked
-                        ? [...colors, c]
-                        : colors.filter((x) => x !== c),
-                    )
+                    setPriority(e.target.value as typeof priority)
                   }
-                />
-                {c}
-              </label>
-            ))}
-          </div>
-          <div className="size-inputs">
-            {sizes.map((s) => (
-              <Field key={s} label={s}>
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  max="1000000"
-                  value={quantities[s] || 0}
-                  onChange={(e) =>
-                    setQuantities({
-                      ...quantities,
-                      [s]: Number(e.target.value),
-                    })
-                  }
-                />
+                >
+                  {priorities.map((p) => (
+                    <option key={p}>{p}</option>
+                  ))}
+                </select>
               </Field>
-            ))}
-          </div>
-          <button
-            type="button"
-            disabled={!colors.length || busy || (!!order?.cancelled && !reopen)}
-            onClick={add}
-          >
-            <Plus size={15} />
-            Thêm các màu đã chọn
-          </button>
+            </div>
+            {!manual && (
+              <div className="size-selector">
+                {[
+                  ...new Set(
+                    catalogue.filter((s) => s.sku === code).map((s) => s.color),
+                  ),
+                ].map((c) => (
+                  <label key={c}>
+                    <input
+                      type="checkbox"
+                      checked={colors.includes(c)}
+                      onChange={(e) =>
+                        setColors(
+                          e.target.checked
+                            ? [...colors, c]
+                            : colors.filter((x) => x !== c),
+                        )
+                      }
+                    />
+                    {c}
+                  </label>
+                ))}
+                {code && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setColors([
+                        ...new Set(
+                          catalogue
+                            .filter((s) => s.sku === code)
+                            .map((s) => s.color),
+                        ),
+                      ])
+                    }
+                  >
+                    Chọn tất cả màu
+                  </button>
+                )}
+              </div>
+            )}
+            <div className="size-inputs">
+              {sizes.map((s) => (
+                <Field key={s} label={s}>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    max="1000000"
+                    value={quantities[s] || 0}
+                    onChange={(e) =>
+                      setQuantities({
+                        ...quantities,
+                        [s]: Number(e.target.value),
+                      })
+                    }
+                  />
+                </Field>
+              ))}
+            </div>
+            <button
+              type="button"
+              disabled={busy || (!!order?.cancelled && !reopen)}
+              onClick={add}
+            >
+              <Plus size={15} />
+              Thêm các màu đã chọn
+            </button>
+          </fieldset>
           <small>
-            Chỉ thêm size đã có SKU trong danh mục. Tạo mã/màu/size mới ở Dự
-            kiến sản xuất trước khi lập lệnh.
+            Nhập số lượng rồi bấm “Thêm các màu đã chọn” để đưa vào bảng lệnh
+            phía trên. SKU mới chỉ được ghi vào danh mục khi lưu lệnh thành
+            công; mặc định Mở bán và CHƯA NHẬP TỒN.
           </small>
         </section>
         <Field label="Ghi chú gửi xưởng">
@@ -761,11 +1044,22 @@ function OrderEditor({
           Người thực hiện được lấy từ phiên đăng nhập, khác với trường “Người
           đặt lệnh”.
         </Notice>
+        {validation && (
+          <div className="form-error" role="alert">
+            {validation}
+          </div>
+        )}
+        {!form.items.length && (
+          <Notice>
+            Chưa thể lưu: lệnh cần ít nhất một mã–màu–size có số lượng lớn hơn
+            0.
+          </Notice>
+        )}
         <div className="modal-actions">
-          <button type="button" onClick={onClose}>
+          <button type="button" disabled={busy} onClick={onClose}>
             Đóng, không lưu
           </button>
-          <button className="primary" disabled={busy || !form.items.length}>
+          <button className="primary" disabled={busy}>
             {order ? "Lưu chỉnh sửa và nhật ký" : "Lưu lệnh vào lịch sử"}
           </button>
         </div>
@@ -798,7 +1092,8 @@ function OrderDetail({
       ),
     ),
     [note, setNote] = useState(""),
-    [qty, setQty] = useState<Record<string, number>>({});
+    [qty, setQty] = useState<Record<string, number>>({}),
+    [receiptError, setReceiptError] = useState("");
   const retry = useRef<{ payload: string; key: string } | null>(null);
   const t = totals(order),
     archived = !!order.deletedAt;
@@ -808,6 +1103,28 @@ function OrderDetail({
       .catch((e) => setHistoryError(e.message));
   }, [order.id, order.version]);
   const receive = async () => {
+    setReceiptError("");
+    if (!date || !Object.values(qty).some((q) => q > 0)) {
+      setReceiptError(
+        "Chọn ngày nhận và nhập số lượng nhận cho ít nhất một SKU.",
+      );
+      return;
+    }
+    if (
+      Object.entries(qty).some(
+        ([id, q]) =>
+          !Number.isInteger(q) ||
+          q < 0 ||
+          q >
+            (order.items.find((i) => i.id === id)?.qty || 0) -
+              (order.items.find((i) => i.id === id)?.received || 0),
+      )
+    ) {
+      setReceiptError(
+        "Số nhận phải là số nguyên không âm và không vượt số còn chờ của từng SKU.",
+      );
+      return;
+    }
     const body = {
       expectedVersion: order.version,
       date,
@@ -841,6 +1158,7 @@ function OrderDetail({
       wide
     >
       <div className="print-order">
+        <h2>LỆNH SẢN XUẤT · {order.code}</h2>
         <div className="order-summary">
           <div>
             <h3>{order.supplier}</h3>
@@ -962,6 +1280,11 @@ function OrderDetail({
           </table>
         </div>
       </div>
+      {receiptError && (
+        <div className="form-error" role="alert">
+          {receiptError}
+        </div>
+      )}
       {!archived &&
         can(actor.role, "receive") &&
         !order.cancelled &&
@@ -983,7 +1306,7 @@ function OrderDetail({
             </Field>
             <button
               className="primary"
-              disabled={busy || !date || !Object.values(qty).some((n) => n > 0)}
+              disabled={busy}
               onClick={() => void receive()}
             >
               <PackagePlus size={16} />

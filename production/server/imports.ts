@@ -307,15 +307,31 @@ export async function salesReport(db: DB, from?: string, to?: string) {
       "TB chia cố định 2/7 ngày như V9; hãy xác nhận file bao phủ đủ cửa sổ, ngày thiếu không tự nội suy.",
   };
 }
-export async function syncSales(db: DB, actor: Actor, mode: "2" | "7") {
+export async function syncSales(
+  db: DB,
+  actor: Actor,
+  mode: "2" | "7",
+  selected?: { sku: string; color: string; size: string }[],
+) {
   const report = await salesReport(db);
   const existing = await variants(db);
+  const key = (s: { sku: string; color: string; size: string }) =>
+    JSON.stringify([s.sku.toUpperCase(), s.color.toLowerCase(), s.size]);
+  const wanted = selected && new Set(selected.map(key));
+  if (
+    wanted &&
+    (wanted.size === 0 ||
+      [...wanted].some((k) => !report.variants.some((r) => key(r) === k)))
+  )
+    throw new AppError(
+      400,
+      "Chọn SKU có dữ liệu bán hợp lệ trước khi chuyển sang dự báo.",
+    );
   let count = 0;
   for (const r of report.variants) {
+    if (wanted && !wanted.has(key(r))) continue;
     if (!sizes.includes(r.size as any)) continue;
-    const old = existing.find(
-      (s) => s.sku === r.sku && s.color === r.color && s.size === r.size,
-    );
+    const old = existing.find((s) => key(s) === key(r));
     const { id, version, ...fields } = old || {
       id: undefined,
       version: undefined,
@@ -324,7 +340,7 @@ export async function syncSales(db: DB, actor: Actor, mode: "2" | "7") {
       ...fields,
       sku: r.sku,
       name: old?.name || r.name,
-      color: r.color,
+      color: old?.color || r.color,
       size: r.size,
       day1: r.day1,
       day2: r.day2,

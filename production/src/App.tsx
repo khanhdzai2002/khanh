@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -18,7 +18,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { api, send, setCsrf } from "./api";
-import { fmt, Empty, Notice, type Run } from "./ui";
+import { fmt, Empty, Notice, ActionFeedback, type Run } from "./ui";
 import {
   can,
   forecast,
@@ -50,6 +50,7 @@ const pages = [
   { id: "settings", name: "Cấu hình & dữ liệu", icon: Settings },
 ];
 export default function App() {
+  const running = useRef(false);
   const [user, setUser] = useState<{
       id: string;
       name: string;
@@ -121,11 +122,20 @@ export default function App() {
     void boot();
   }, [boot]);
   const run: Run = async (task, message = "Đã lưu thay đổi") => {
+    if (running.current) return false;
+    running.current = true;
     setBusy(true);
     setError("");
     try {
       await task();
-      await refresh();
+      // A successful write followed by a failed refresh must not invite resubmission.
+      try {
+        await refresh();
+      } catch {
+        setError(
+          "Thao tác đã hoàn tất nhưng chưa tải lại được dữ liệu. Bấm Tải lại dữ liệu; không gửi lại thao tác vừa lưu.",
+        );
+      }
       setToast(message);
       setTimeout(() => setToast(""), 4000);
       return true;
@@ -133,6 +143,7 @@ export default function App() {
       setError((e as Error).message);
       return false;
     } finally {
+      running.current = false;
       setBusy(false);
     }
   };
@@ -226,185 +237,193 @@ export default function App() {
     );
   const planner = can(user.role, "plan");
   return (
-    <div className="app">
-      <aside className={menu ? "open" : ""}>
-        <a
-          className="brand"
-          href="#"
-          onClick={(e) => {
-            e.preventDefault();
-            navigate("dashboard");
-          }}
-        >
-          <img src="/cf.svg" alt="CF" />
-          <div>
-            COMS-FLOW<small>PRODUCTION MANAGEMENT</small>
-          </div>
-        </a>
-        <div className="nav-label">KHÔNG GIAN VẬN HÀNH</div>
-        <nav>
-          {pages.map((p) => (
-            <button
-              key={p.id}
-              className={page === p.id ? "active" : ""}
-              onClick={() => navigate(p.id)}
-            >
-              <p.icon size={19} />
-              {p.name}
-              {p.id === "history" && (
-                <span className="nav-count">
-                  {
-                    data.orders.filter(
-                      (o) => !o.deletedAt && totals(o).pending > 0,
-                    ).length
-                  }
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <span className="status-dot" /> PostgreSQL · Dữ liệu tập trung
-          <small>Giờ vận hành: Việt Nam (UTC+7)</small>
-        </div>
-      </aside>
-      <div className="workspace">
-        <div className="topbar">
-          <div className="breadcrumb">
-            <button
-              className="mobile-menu"
-              aria-label="Mở điều hướng"
-              onClick={() => setMenu(!menu)}
-            >
-              <Menu size={20} />
-            </button>
-            <span>Không gian sản xuất</span>
-            <ChevronRight size={14} />
-            <strong>{pages.find((p) => p.id === page)?.name}</strong>
-          </div>
-          <div className="user-bar">
-            <button
-              title="Tải lại dữ liệu"
-              aria-label="Tải lại dữ liệu"
-              disabled={busy}
-              onClick={() => void run(refresh, "Đã cập nhật dữ liệu")}
-            >
-              <RefreshCw size={16} />
-            </button>
-            <span className="avatar">{user.name.slice(0, 1)}</span>
+    <ActionFeedback.Provider
+      value={{ error, busy, clearError: () => setError("") }}
+    >
+      <div className="app">
+        <aside className={menu ? "open" : ""}>
+          <a
+            className="brand"
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              navigate("dashboard");
+            }}
+          >
+            <img src="/cf.svg" alt="CF" />
             <div>
-              {user.name}
-              <small>{user.role}</small>
+              COMS-FLOW<small>PRODUCTION MANAGEMENT</small>
             </div>
-            <button
-              aria-label="Đăng xuất"
-              disabled={busy}
-              onClick={() => void logout()}
-            >
-              <LogOut size={17} />
-            </button>
+          </a>
+          <div className="nav-label">KHÔNG GIAN VẬN HÀNH</div>
+          <nav>
+            {pages.map((p) => (
+              <button
+                key={p.id}
+                className={page === p.id ? "active" : ""}
+                onClick={() => navigate(p.id)}
+              >
+                <p.icon size={19} />
+                {p.name}
+                {p.id === "history" && (
+                  <span className="nav-count">
+                    {
+                      data.orders.filter(
+                        (o) => !o.deletedAt && totals(o).pending > 0,
+                      ).length
+                    }
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
+          <div className="sidebar-bottom">
+            <span className="status-dot" /> PostgreSQL · Dữ liệu tập trung
+            <small>Giờ vận hành: Việt Nam (UTC+7)</small>
           </div>
+        </aside>
+        <div className="workspace">
+          <div className="topbar">
+            <div className="breadcrumb">
+              <button
+                className="mobile-menu"
+                aria-label="Mở điều hướng"
+                onClick={() => setMenu(!menu)}
+              >
+                <Menu size={20} />
+              </button>
+              <span>Không gian sản xuất</span>
+              <ChevronRight size={14} />
+              <strong>{pages.find((p) => p.id === page)?.name}</strong>
+            </div>
+            <div className="user-bar">
+              <button
+                title="Tải lại dữ liệu"
+                aria-label="Tải lại dữ liệu"
+                disabled={busy}
+                onClick={() => void run(refresh, "Đã cập nhật dữ liệu")}
+              >
+                <RefreshCw size={16} />
+              </button>
+              <span className="avatar">{user.name.slice(0, 1)}</span>
+              <div>
+                {user.name}
+                <small>{user.role}</small>
+              </div>
+              <button
+                aria-label="Đăng xuất"
+                disabled={busy}
+                onClick={() => void logout()}
+              >
+                <LogOut size={17} />
+              </button>
+            </div>
+          </div>
+          <main aria-busy={busy}>
+            {development && (
+              <div className="dev-banner">
+                MÔI TRƯỜNG PHÁT TRIỂN · Danh tính DEV không phải đăng nhập Lark
+                · Không nhập dữ liệu sản xuất thật
+              </div>
+            )}
+            {user.role === "Viewer" && (
+              <Notice>
+                Bạn đang có quyền Viewer (chỉ xem), nên chưa thể thêm SKU,
+                tạo/sửa lệnh hoặc ghi nhận hàng.{" "}
+                <button onClick={() => navigate("settings")}>
+                  Xem tài khoản & hướng dẫn cấp quyền
+                </button>
+              </Notice>
+            )}
+            {error && (
+              <div className="error" role="alert">
+                {error}
+                <button
+                  onClick={() => setError("")}
+                  aria-label="Đóng thông báo"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            {toast && (
+              <div className="toast" role="status">
+                <PackageCheck size={18} />
+                {toast}
+              </div>
+            )}
+            {busy && (
+              <div className="working" role="status">
+                Đang xử lý…
+              </div>
+            )}
+            {page === "dashboard" && (
+              <Dashboard data={data} selected={selected} navigate={navigate} />
+            )}
+            {page === "planning" && (
+              <Planning
+                data={data}
+                selected={selected}
+                setSelected={setSelected}
+                run={run}
+                busy={busy}
+                writable={planner}
+                createOrder={() => {
+                  setDraftFrom(
+                    data.skus.filter(
+                      (s) =>
+                        selected.includes(s.id) &&
+                        forecast(s, data.policy).need > 0,
+                    ),
+                  );
+                  navigate("orders");
+                }}
+              />
+            )}
+            {["orders", "history", "archived"].includes(page) && (
+              <Orders
+                data={data}
+                page={page}
+                actor={user}
+                run={run}
+                busy={busy}
+                seed={draftFrom}
+                clearSeed={() => setDraftFrom([])}
+              />
+            )}
+            {page === "sales" && (
+              <Sales
+                data={data}
+                run={run}
+                writable={planner}
+                busy={busy}
+                navigate={navigate}
+              />
+            )}
+            {page === "accounts" && (
+              <AccountsPage
+                run={run}
+                role={user.role}
+                busy={busy}
+                onSetup={() => navigate("settings")}
+              />
+            )}
+            {page === "settings" && (
+              <SettingsPage
+                run={run}
+                role={user.role}
+                busy={busy}
+                onAccounts={() => navigate("accounts")}
+              />
+            )}
+          </main>
+          <footer className="app-footer">
+            COMS-FLOW · Production Management{" "}
+            <span>Chỉ quản trị đặt hàng, gối hàng và sản xuất</span>
+          </footer>
         </div>
-        <main aria-busy={busy}>
-          {development && (
-            <div className="dev-banner">
-              MÔI TRƯỜNG PHÁT TRIỂN · Danh tính DEV không phải đăng nhập Lark ·
-              Không nhập dữ liệu sản xuất thật
-            </div>
-          )}
-          {user.role === "Viewer" && (
-            <Notice>
-              Bạn đang có quyền Viewer (chỉ xem), nên chưa thể thêm SKU, tạo/sửa
-              lệnh hoặc ghi nhận hàng.{" "}
-              <button onClick={() => navigate("settings")}>
-                Xem tài khoản & hướng dẫn cấp quyền
-              </button>
-            </Notice>
-          )}
-          {error && (
-            <div className="error" role="alert">
-              {error}
-              <button onClick={() => setError("")} aria-label="Đóng thông báo">
-                ×
-              </button>
-            </div>
-          )}
-          {toast && (
-            <div className="toast" role="status">
-              <PackageCheck size={18} />
-              {toast}
-            </div>
-          )}
-          {busy && (
-            <div className="working" role="status">
-              Đang xử lý…
-            </div>
-          )}
-          {page === "dashboard" && (
-            <Dashboard data={data} selected={selected} navigate={navigate} />
-          )}
-          {page === "planning" && (
-            <Planning
-              data={data}
-              selected={selected}
-              setSelected={setSelected}
-              run={run}
-              busy={busy}
-              writable={planner}
-              createOrder={() => {
-                setDraftFrom(
-                  data.skus.filter(
-                    (s) =>
-                      selected.includes(s.id) &&
-                      forecast(s, data.policy).need > 0,
-                  ),
-                );
-                navigate("orders");
-              }}
-            />
-          )}
-          {["orders", "history", "archived"].includes(page) && (
-            <Orders
-              data={data}
-              page={page}
-              actor={user}
-              run={run}
-              busy={busy}
-              seed={draftFrom}
-              clearSeed={() => setDraftFrom([])}
-            />
-          )}
-          {page === "sales" && (
-            <Sales
-              run={run}
-              writable={planner}
-              busy={busy}
-              navigate={navigate}
-            />
-          )}
-          {page === "accounts" && (
-            <AccountsPage
-              run={run}
-              role={user.role}
-              busy={busy}
-              onSetup={() => navigate("settings")}
-            />
-          )}
-          {page === "settings" && (
-            <SettingsPage
-              run={run}
-              role={user.role}
-              busy={busy}
-              onAccounts={() => navigate("accounts")}
-            />
-          )}
-        </main>
-        <footer className="app-footer">
-          COMS-FLOW · Production Management{" "}
-          <span>Chỉ quản trị đặt hàng, gối hàng và sản xuất</span>
-        </footer>
       </div>
-    </div>
+    </ActionFeedback.Provider>
   );
 }
 function Dashboard({

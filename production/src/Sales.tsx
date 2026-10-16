@@ -7,14 +7,19 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { api, send, fileBase64 } from "./api";
+import { NumberInput } from "./Planning";
+import type { Snapshot } from "./App";
+import { skuSchema, forecast, stages, type Variant } from "../shared/domain";
 import { trendSignal } from "../shared/sales";
 import { Empty, Notice, Modal, Field, fmt, localTime, type Run } from "./ui";
 export function Sales({
+  data,
   run,
   writable,
   busy,
   navigate,
 }: {
+  data: Snapshot;
   run: Run;
   writable: boolean;
   busy: boolean;
@@ -31,6 +36,7 @@ export function Sales({
     [mode, setMode] = useState("2"),
     [refresh, setRefresh] = useState(0);
   useEffect(() => {
+    let active = true;
     setError("");
     void api(
       "/api/sales?" +
@@ -39,11 +45,19 @@ export function Sales({
           ...(to ? { to } : {}),
         }),
     )
-      .then(setReport)
-      .catch((e) => setError(e.message));
+      .then((value) => {
+        if (active) setReport(value);
+      })
+      .catch((e) => {
+        if (active) setError(e.message);
+      });
+    return () => {
+      active = false;
+    };
   }, [from, to, refresh]);
   const rows = (report?.variants || []).filter(
       (r: any) =>
+        r.qty > 0 &&
         (!code || r.sku === code) &&
         (!search ||
           (r.sku + " " + r.color + " " + r.size)
@@ -66,6 +80,63 @@ export function Sales({
       daily.set(r.date, (daily.get(r.date) || 0) + r.qty);
     }
   const ranked = [...top].sort((a, b) => b[1] - a[1]);
+  const planRow = (r: any) =>
+    data.skus.find(
+      (s) =>
+        s.sku.toUpperCase() === r.sku.toUpperCase() &&
+        s.color.toLowerCase() === r.color.toLowerCase() &&
+        s.size === r.size,
+    );
+  const fields = (r: any) => {
+    const { id, version, ...body } = planRow(r) || {};
+    return body;
+  };
+  const updatePlan = (r: any, patch: Partial<Variant>) =>
+    run(() => {
+      const old = planRow(r);
+      const body = skuSchema.parse({
+        ...(old
+          ? fields(r)
+          : { sku: r.sku, color: r.color, size: r.size, name: r.name }),
+        ...patch,
+      });
+      return old
+        ? send(
+            `/api/skus/${old.id}`,
+            { expectedVersion: old.version, sku: body },
+            "PUT",
+          )
+        : send("/api/skus", body);
+    });
+  const reportExport = (format: string) =>
+    "/api/export/sales?" +
+    new URLSearchParams({
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+      ...(code ? { sku: code } : {}),
+      search,
+      mode,
+      format,
+    });
+  const transfer = (selected: any[]) => {
+    if (
+      !selected.length ||
+      !confirm(
+        `Chuyển số bán của ${selected.length} SKU đang chọn sang dự báo? Giữ nguyên tồn, đang về, vòng đời và SL test.`,
+      )
+    )
+      return;
+    void run(
+      () =>
+        send("/api/sales/sync", {
+          mode,
+          keys: selected.map(({ sku, color, size }) => ({ sku, color, size })),
+        }),
+      "Đã cập nhật số bán, giữ nguyên tồn và vòng đời",
+    ).then((ok) => {
+      if (ok) navigate("planning");
+    });
+  };
   return (
     <>
       <div className="page-heading">
@@ -285,10 +356,16 @@ export function Sales({
                   kỳ xem như V9.
                 </p>
               </div>
-              <a className="button" href="/api/export/sales?format=xlsx">
-                <Download size={16} />
-                Excel
-              </a>
+              <div className="actions">
+                <a className="button" href={reportExport("csv")}>
+                  <Download size={16} />
+                  CSV
+                </a>
+                <a className="button" href={reportExport("xlsx")}>
+                  <Download size={16} />
+                  Excel
+                </a>
+              </div>
             </div>
             <div className="toolbar">
               <div className="search">
@@ -311,22 +388,10 @@ export function Sales({
               {writable && (
                 <button
                   className="primary"
-                  disabled={busy || !report.variants.length}
-                  onClick={() => {
-                    if (
-                      confirm(
-                        "Cập nhật doanh số tất cả SKU trong báo cáo sang dự kiến sản xuất? Giữ nguyên tồn, đang về, vòng đời và SL test.",
-                      )
-                    )
-                      void run(
-                        () => send("/api/sales/sync", { mode }),
-                        "Đã cập nhật số bán, giữ nguyên tồn và vòng đời",
-                      ).then((ok) => {
-                        if (ok) navigate("planning");
-                      });
-                  }}
+                  disabled={busy || !rows.length}
+                  onClick={() => transfer(rows)}
                 >
-                  Chuyển tất cả sang dự báo <ArrowRight size={16} />
+                  Chuyển SKU đang lọc sang dự báo <ArrowRight size={16} />
                 </button>
               )}
             </div>
@@ -345,6 +410,12 @@ export function Sales({
                         "TB 7 ngày",
                         "Tín hiệu bán",
                         "Lưu ý",
+                        "Tồn thực tế",
+                        "Đang về",
+                        "Vòng đời",
+                        "SL test",
+                        "Đề xuất / Công thức",
+                        "Thao tác",
                       ].map((s) => (
                         <th key={s}>{s}</th>
                       ))}
@@ -364,6 +435,101 @@ export function Sales({
                           <span className="badge orange">{r.signal}</span>
                         </td>
                         <td>{r.viral ? "Kiểm tra Mega Live / viral" : "—"}</td>
+                        <td>
+                          <NumberInput
+                            label={`Tồn bán hàng ${r.sku} ${r.color} ${r.size}`}
+                            value={planRow(r)?.stock ?? null}
+                            disabled={!writable || busy}
+                            nullable
+                            integer
+                            save={(stock) =>
+                              updatePlan(r, {
+                                stock,
+                                inventorySource: "Nhập thủ công",
+                                inventoryAt: new Date().toISOString(),
+                              })
+                            }
+                          />
+                          {planRow(r)?.stock == null && (
+                            <small>CHƯA NHẬP TỒN</small>
+                          )}
+                        </td>
+                        <td>
+                          <NumberInput
+                            label={`Đang về bán hàng ${r.sku} ${r.color} ${r.size}`}
+                            value={planRow(r)?.inbound ?? 0}
+                            disabled={!writable || busy}
+                            integer
+                            save={(inbound) =>
+                              updatePlan(r, { inbound: inbound ?? 0 })
+                            }
+                          />
+                        </td>
+                        <td>
+                          <select
+                            aria-label={`Vòng đời bán hàng ${r.sku} ${r.color} ${r.size}`}
+                            disabled={!writable || busy}
+                            value={planRow(r)?.health || "Mở bán"}
+                            onChange={(e) =>
+                              void updatePlan(r, {
+                                health: e.target.value as Variant["health"],
+                              })
+                            }
+                          >
+                            {stages.map((s) => (
+                              <option key={s}>{s}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td>
+                          {!planRow(r) || planRow(r)?.health === "Mở bán" ? (
+                            <NumberInput
+                              label={`Test bán hàng ${r.sku} ${r.color} ${r.size}`}
+                              value={planRow(r)?.pilotQty ?? 0}
+                              disabled={!writable || busy}
+                              integer
+                              maximum={100000}
+                              save={(pilotQty) =>
+                                updatePlan(r, { pilotQty: pilotQty ?? 0 })
+                              }
+                            />
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td>
+                          {(() => {
+                            const f = forecast(
+                              skuSchema.parse({
+                                ...fields(r),
+                                sku: r.sku,
+                                color: r.color,
+                                size: r.size,
+                                day1: r.day1,
+                                day2: r.day2,
+                                abnormal: mode === "7",
+                                manualRate: r.r7,
+                              }),
+                              data.policy,
+                            );
+                            return (
+                              <>
+                                <b>{fmt(f.need)}</b>
+                                <small>{f.basis}</small>
+                              </>
+                            );
+                          })()}
+                        </td>
+                        <td>
+                          {writable && (
+                            <button
+                              disabled={busy}
+                              onClick={() => transfer([r])}
+                            >
+                              Đưa SKU này sang dự báo
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -380,7 +546,17 @@ export function Sales({
           <section className="panel">
             <div className="panel-title">
               <h2>Combo và dòng cần đối soát</h2>
-              <a className="button" href="/api/export/combos">
+              <a
+                className="button"
+                href={
+                  "/api/export/combos?" +
+                  new URLSearchParams({
+                    ...(from ? { from } : {}),
+                    ...(to ? { to } : {}),
+                    ...(code ? { sku: code } : {}),
+                  })
+                }
+              >
                 <Download size={15} />
                 CSV combo
               </a>

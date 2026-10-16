@@ -1,6 +1,20 @@
 import type { ReactNode } from "react";
-import { useRef, useEffect } from "react";
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useId,
+  createContext,
+  useContext,
+  useRef,
+  useEffect,
+} from "react";
 import { X, PackageOpen, AlertTriangle } from "lucide-react";
+export const ActionFeedback = createContext({
+  error: "",
+  busy: false,
+  clearError: () => {},
+});
 export const fmt = (n: number) =>
   new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 }).format(n);
 export function Empty({ children }: { children: ReactNode }) {
@@ -31,10 +45,14 @@ export function Modal({
   onClose: () => void;
   wide?: boolean;
 }) {
+  const feedback = useContext(ActionFeedback);
   const dialog = useRef<HTMLElement>(null);
   const close = useRef(onClose);
-  close.current = onClose;
+  close.current = () => {
+    if (!feedback.busy) onClose();
+  };
   useEffect(() => {
+    feedback.clearError();
     const previous = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -74,7 +92,7 @@ export function Modal({
     <div
       className="overlay"
       onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) close.current();
       }}
     >
       <section
@@ -86,10 +104,20 @@ export function Modal({
       >
         <header>
           <h2>{title}</h2>
-          <button aria-label="Đóng" onClick={onClose}>
+          <button
+            type="button"
+            aria-label="Đóng"
+            disabled={feedback.busy}
+            onClick={onClose}
+          >
             <X size={20} />
           </button>
         </header>
+        {feedback.error && (
+          <div className="dialog-feedback" role="alert">
+            {feedback.error}
+          </div>
+        )}
         {children}
       </section>
     </div>
@@ -102,11 +130,26 @@ export function Field({
   label: string;
   children: ReactNode;
 }) {
+  const generated = useId();
+  const nodes = Children.toArray(children);
+  const control = nodes.find(
+    (node) =>
+      isValidElement(node) &&
+      typeof node.type === "string" &&
+      ["input", "select", "textarea"].includes(node.type),
+  );
+  const id = isValidElement<{ id?: string }>(control)
+    ? control.props.id || generated
+    : generated;
   return (
-    <label className="field">
-      <span>{label}</span>
-      {children}
-    </label>
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      {nodes.map((node) =>
+        node === control && isValidElement<{ id?: string }>(node)
+          ? cloneElement(node, { id })
+          : node,
+      )}
+    </div>
   );
 }
 export const vnDate = (value: string) =>

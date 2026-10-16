@@ -24,11 +24,14 @@ import {
 import {
   AppError,
   policySchema,
+  skuSchema,
   stages,
   totals,
+  forecast,
   sizes,
 } from "../shared/domain";
 import { initialAdminStatus, bootstrapInitialAdmin } from "./initial-admin";
+import { composeOrder } from "./order-composer";
 import {
   previewSales,
   confirmSales,
@@ -266,6 +269,18 @@ export function makeApp() {
       .status(201)
       .json(await transaction((db) => createOrder(db, req.actor!, req.body))),
   );
+  app.post("/api/orders/compose", permission("order"), async (req, res) =>
+    res
+      .status(201)
+      .json(await transaction((db) => composeOrder(db, req.actor!, req.body))),
+  );
+  app.put("/api/orders/:id/compose", permission("order"), async (req, res) =>
+    res.json(
+      await transaction((db) =>
+        composeOrder(db, req.actor!, req.body, z.uuid().parse(req.params.id)),
+      ),
+    ),
+  );
   app.put("/api/orders/:id", permission("order"), async (req, res) =>
     res.json(
       await transaction((db) =>
@@ -350,13 +365,32 @@ export function makeApp() {
         ),
       ),
   );
-  app.post("/api/sales/sync", permission("plan"), async (req, res) =>
+  app.post("/api/sales/sync", permission("plan"), async (req, res) => {
+    const input = z
+      .object({
+        mode: z.enum(["2", "7"]),
+        keys: z
+          .array(
+            z
+              .object({
+                sku: z.string().min(1),
+                color: z.string().min(1),
+                size: z.enum(sizes),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(10000)
+          .optional(),
+      })
+      .strict()
+      .parse(req.body);
     res.json(
       await transaction((db) =>
-        syncSales(db, req.actor!, z.enum(["2", "7"]).parse(req.body.mode)),
+        syncSales(db, req.actor!, input.mode, input.keys),
       ),
-    ),
-  );
+    );
+  });
   app.post("/api/imports/v9/preview", permission("admin"), async (req, res) =>
     res.json(await transaction((db) => previewV9(db, req.actor!, req.body))),
   );
@@ -506,9 +540,34 @@ export function makeApp() {
       ];
     } else if (kind === "orders" || kind === "archived") {
       const id = req.query.id ? z.uuid().parse(req.query.id) : null;
+      const search = z
+        .string()
+        .max(500)
+        .default("")
+        .parse(req.query.search)
+        .toLowerCase();
+      const filter = z
+        .enum(["", "pending", "done", "cancelled"])
+        .default("")
+        .parse(req.query.filter);
       const all = (await listOrders()).filter(
         (o) =>
           (!id || o.id === id) &&
+          (!search ||
+            [
+              o.code,
+              o.supplier,
+              o.requestedBy,
+              o.deletedReason,
+              ...o.items.map((i) => i.sku + " " + i.color),
+            ]
+              .join(" ")
+              .toLowerCase()
+              .includes(search)) &&
+          (!filter ||
+            (filter === "pending" && totals(o).pending > 0) ||
+            (filter === "done" && !o.cancelled && !totals(o).pending) ||
+            (filter === "cancelled" && o.cancelled)) &&
           (kind === "archived" ? !!o.deletedAt : !o.deletedAt),
       );
       rows = [
@@ -598,23 +657,106 @@ export function makeApp() {
         }
       }
     } else {
-      const report = await salesReport(pool);
-      rows = [
-        ["Ngày", "Mã SP", "Màu", "Size", "Số lượng", "Phân loại", "Ghi chú"],
-        ...report.rows
-          .filter((r) =>
-            kind === "combos" ? r.kind === "combo" : r.kind === "single",
-          )
-          .map((r) => [
-            r.date,
-            r.sku,
-            r.color,
-            r.size,
-            r.qty,
-            r.kind,
-            r.reason,
-          ]),
-      ];
+      const filters = z
+        .object({
+          from: z.iso.date().optional(),
+          to: z.iso.date().optional(),
+          sku: z.string().max(90).optional(),
+          search: z.string().max(500).default(""),
+          mode: z.enum(["2", "7"]).default("2"),
+        })
+        .parse(req.query);
+      if (filters.from && filters.to && filters.from > filters.to)
+        throw new AppError(
+          400,
+          "Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.",
+        );
+      const report = await salesReport(pool, filters.from, filters.to);
+      const matches = (r: { sku: string; color: string; size: string }) =>
+        (!filters.sku || r.sku === filters.sku) &&
+        (!filters.search ||
+          [r.sku, r.color, r.size]
+            .join(" ")
+            .toLowerCase()
+            .includes(filters.search.toLowerCase()));
+      if (kind === "combos") {
+        rows = [
+          ["Ngày", "Mã SP", "Phân loại combo", "Lượt combo", "Ghi chú"],
+          ...report.rows
+            .filter(
+              (r) =>
+                r.kind === "combo" && (!filters.sku || r.sku === filters.sku),
+            )
+            .map((r) => [
+              r.date,
+              r.sku,
+              r.variation,
+              r.qty,
+              "Chưa phân bổ màu/size; cần đối soát",
+            ]),
+        ];
+      } else {
+        const skus = await variants();
+        const policy = policySchema.parse(
+          (await pool.query("SELECT body FROM planning_policies WHERE id=1"))
+            .rows[0].body,
+        );
+        rows = [
+          [
+            "Mã SP",
+            "Màu",
+            "Size",
+            "Số lượng kỳ xem",
+            "Bán 2 ngày",
+            "TB/ngày 2 ngày",
+            "TB/ngày 7 ngày",
+            "Tín hiệu bán",
+            "Tồn đã khai báo",
+            "Đang về",
+            "SL đề xuất",
+            "Vòng đời",
+            "SL test",
+            "Cơ sở tính",
+          ],
+          ...report.variants
+            .filter((r) => r.qty > 0 && matches(r))
+            .map((r) => {
+              const old = skus.find(
+                (s) =>
+                  s.sku === r.sku &&
+                  s.color.toLowerCase() === r.color.toLowerCase() &&
+                  s.size === r.size,
+              );
+              const body = old
+                ? (({ id, version, ...rest }) => rest)(old)
+                : { sku: r.sku, color: r.color, size: r.size };
+              const candidate = skuSchema.parse({
+                ...body,
+                day1: r.day1,
+                day2: r.day2,
+                abnormal: filters.mode === "7",
+                manualRate: r.r7,
+              });
+              const f = forecast(candidate, policy);
+              return [
+                r.sku,
+                r.color,
+                r.size,
+                r.qty,
+                r.q2,
+                r.r2,
+                r.r7,
+                r.signal,
+                old?.stock ?? "CHƯA NHẬP TỒN",
+                old?.inbound || 0,
+                f.need,
+                candidate.health,
+                candidate.pilotQty,
+                f.basis,
+              ];
+            }),
+        ];
+      }
     }
     const safe = (x: unknown) => {
       const s = String(x ?? "");
