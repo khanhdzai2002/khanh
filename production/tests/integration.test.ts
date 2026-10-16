@@ -126,6 +126,32 @@ afterAll(async () => {
   await pool.end();
 });
 describe("PostgreSQL — giao dịch lệnh và biên nhận", () => {
+  it("migration lặp và đồng thời giữ nguyên lệnh, biên nhận và lịch sử", async () => {
+    const o = await order();
+    await receipt(o, 300);
+    const before = await loadOrder(pool, o.id);
+    const history = (
+      await pool.query("SELECT * FROM production_receipts WHERE order_id=$1", [
+        o.id,
+      ])
+    ).rows;
+    await Promise.all([migrate(), migrate()]);
+    expect(await loadOrder(pool, o.id)).toEqual(before);
+    expect(
+      (
+        await pool.query(
+          "SELECT * FROM production_receipts WHERE order_id=$1",
+          [o.id],
+        )
+      ).rows,
+    ).toEqual(history);
+    expect(
+      Number(
+        (await pool.query("SELECT count(*) AS n FROM schema_migrations"))
+          .rows[0].n,
+      ),
+    ).toBe(4);
+  });
   it("tạo lệnh nhiều màu nhiều size, không tự chuyển Nháp thành đã gửi", async () => {
     const ids: string[] = [];
     for (const color of ["Cam thử", "Trắng thử"])

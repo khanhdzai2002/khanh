@@ -5,7 +5,7 @@
 - Node.js 24.19.0, npm 11.9.0, PostgreSQL 17 trong Docker; migrations 001–004.
 - `npm run build`: TypeScript và Vite build thành công. Tailwind biên dịch cục bộ; không cần CDN giao diện V9.
 - `npm ci` theo lockfile chạy lại thành công. Sau cài lại, đã khởi động lại Vite để làm mới dependency optimization (server đang chạy trước đó trả 504 cho cache cũ), rồi xác minh login/logout DEV và API trả 401 sau logout.
-- `npm test`: **77 tests passed, 4 files**, không có test skip. 23 tests domain, 32 tests integration PostgreSQL/HTTP và 14 tests Lark mock/security và 8 tests cấu hình origin/callback.
+- `npm test`: **78 tests passed, 4 files**, không có test skip. 23 tests domain, 33 tests integration PostgreSQL/HTTP và 14 tests Lark mock/security và 8 tests cấu hình origin/callback.
 - Công thức: một test đối chiếu 400 đầu vào với chính hàm calc V9 trích nguyên văn, kiểm tra need/sale/raw/target/cover/flag. Có test riêng ví dụ 60, làm tròn, ngày chờ opt-in, thiếu tồn, bất thường và bốn vòng đời.
 - Giao dịch: nhiều màu/size, nhận 300+450+250 từ 1.000; chặn vượt nhận; idempotency đồng thời; sửa sau nhận, không giảm dưới đã nhận, không đổi SKU/xóa dòng nhận; revision trước/sau; hai người sửa cùng version; xóa/khôi phục; hủy và reopen; giữ mã đã dùng; trigger bất biến.
 - Import: CSV và XLSX thật, preview chưa ghi báo cáo, confirm lặp, replace giữ nguồn cũ, append bỏ trùng và khóa khi thiếu line ID, bỏ ngày xuất chưa đủ, chuyển bán giữ tồn/inbound/vòng đời/test. JSON V9: phát hiện trùng/số nhận lệch, giữ tồn unknown, không seed sales cũ; nhập lệnh đã xóa có 2 biên nhận và nguồn editLog, nhập bản nháp giữ trạng thái.
@@ -27,6 +27,14 @@ Bản build cũng đã được Node phục vụ với NODE_ENV=production, DEV_
 ## Chuẩn bị Railway
 
 Đã kiểm tra APP_BASE_URL, domain Railway do nền tảng cấp, từ chối origin cũ xung đột, callback cùng origin; health anonymous trên `/health` và `/api/health`, database lỗi trả 503 không lộ thông tin kết nối. Chưa có Project/URL Railway, chưa kiểm tra HTTPS hoặc OAuth live. Docker build đã tải được base image nhưng bị kẹt tại npm ci; kiểm tra độc lập fetch npm registry trong container trả TypeError. Đã dừng build bị chặn. Build npm trên host thành công; chưa xác minh Docker image hoàn chỉnh hoặc việc Railway chấp nhận railway.json.
+
+## Sửa khởi động khi thiếu migrations trên Railway
+
+`npm start` hiện chờ migration hoàn tất trước khi mở cổng HTTP, bổ sung cho pre-deploy hook để tránh host bỏ qua config-as-code ở monorepo. Migrations giữ transaction/advisory lock và bảng phiên, không seed lệnh hoặc số bán. Kết nối có timeout 10 giây; lỗi khởi động chỉ ghi mã lỗi và hướng dẫn, không ghi URI/password.
+
+Đã thử tiến trình production với PostgreSQL cục bộ trên database tổng hợp mới, tên kết thúc `_test`: ban đầu không có bảng; khởi động tự áp dụng 4 migrations, `/health` 200, API anonymous 401, policy vẫn 5 ngày và không có lệnh. Khởi động lại không áp dụng SQL đã chạy. Trỏ tới cổng database không tồn tại: tiến trình thoát 1 trước khi listen, log không chứa mật khẩu. Database thử riêng đã được xóa sau kiểm tra, không tác động database nghiệp vụ. Integration test xác minh hai migration đồng thời giữ nguyên lệnh/biên nhận đã nhận một phần.
+
+Lỗi báo cho người dùng được tách giữa thiếu bảng (`42P01`) và lỗi kết nối. Chưa có quyền xem Postgres/variables/logs của Railway thực tế để kết luận nguyên nhân ở deployment của người dùng.
 
 ## Kiểm tra bản sửa điểm mở web và cấu hình HTTPS
 

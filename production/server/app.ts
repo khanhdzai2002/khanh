@@ -684,14 +684,15 @@ export function makeApp() {
       });
     if (err instanceof AppError)
       return res.status(err.status).json({ message: err.message });
-    if (
-      ["ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "57P03", "42P01"].includes(
-        err.code,
-      )
-    )
+    if (err.code === "42P01")
       return res.status(503).json({
         message:
-          "Backend chưa kết nối được PostgreSQL hoặc chưa chạy migrations. Kiểm tra dịch vụ database và chạy npm run migrate.",
+          "PostgreSQL chưa có đủ bảng dữ liệu. Cập nhật deployment mới để chạy migrations trước khi khởi động.",
+      });
+    if (["ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "57P03"].includes(err.code))
+      return res.status(503).json({
+        message:
+          "Backend chưa kết nối được PostgreSQL. Kiểm tra Postgres đang Online và DATABASE_URL tham chiếu đúng service.",
       });
     if (err.code === "23505")
       return res.status(409).json({

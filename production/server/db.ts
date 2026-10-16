@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 export const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
   max: 10,
+  connectionTimeoutMillis: 10000,
 });
 export type DB = Pick<pg.PoolClient, "query">;
 export async function transaction<T>(

@@ -74,7 +74,7 @@ Không copy PUBLIC_URL cũ hoặc `.env.local` lên Railway. Chưa có URL thậ
 2. **Sao chép nguyên URL HTTPS Railway thực sự hiển thị**, có đuôi `.up.railway.app`. Đây mới là URL dùng cho các bước tiếp theo; file này không dự đoán tên domain.
 3. Trong Variables, đặt **APP_BASE_URL = URL HTTPS vừa sao chép**, không có đường dẫn hoặc query. Bỏ PUBLIC_URL cũ nếu có. Nếu đặt cả PUBLIC_URL và APP_BASE_URL thì chúng phải cùng origin. Có thể giữ LARK_REDIRECT_URI trống để tự suy callback.
 4. `RAILWAY_PUBLIC_DOMAIN` do nền tảng cấp cũng được backend hỗ trợ khi chưa có URL tường minh; app không lấy origin từ Host header. Nếu domain chỉ được cấp sau khi deployment đầu thành công, tạo domain rồi lưu APP_BASE_URL và redeploy; không đổi sang một domain tưởng tượng để lách cấu hình.
-5. Bấm **Deploy / Apply Changes**, mở **Deployments → deployment mới → View Logs**. Kiểm tra build React, pre-deploy migrations và `COMS-FLOW API listening on port ...`. Migration có transaction và advisory lock, không seed dữ liệu công ty. Migration thất bại phải sửa trước khi chạy app.
+5. Bấm **Deploy / Apply Changes**, mở **Deployments → deployment mới → View Logs**. Kiểm tra build React, pre-deploy migrations và `COMS-FLOW API listening on port ...`. Migration có transaction và advisory lock, không seed dữ liệu công ty. `npm start` cũng chờ migrations xong trước khi mở cổng, phòng trường hợp Railway chưa nạp pre-deploy hook. Migration thất bại phải sửa trước khi chạy app.
 6. Khi trạng thái **Active/Success**, mở URL đó trong cửa sổ ẩn danh. Phải thấy trang **COMS-FLOW**, không phải ứng dụng đặt xe.
 7. Mở thêm đường dẫn `/health` trên cùng URL: phải trả `{"ok":true}`. `/api/skus` khi chưa đăng nhập phải trả 401. Health chỉ xác nhận database/schema khả dụng, không chứng minh OAuth hoạt động.
 
@@ -107,7 +107,7 @@ Dùng môi trường staging hoặc dữ liệu tổng hợp được phép, kh�
 - Lệnh 1.000, nhận 300 rồi 450 → còn 250, tiến độ 75%; không nhận vượt. Không tự cộng tồn. Sửa giữ số nhận/audit; xóa mềm rồi khôi phục.
 - Reload, logout/login, bấm **Redeploy** web service với cùng Postgres rồi kiểm tra dữ liệu test và lịch sử vẫn còn. Không xóa database/volume.
 - Thử import file tổng hợp CSV/XLSX, combo cần đối soát không quy về một SKU; tồn/vòng đời không bị ghi đè khi chuyển số bán.
-- Chỉ đánh dấu hoàn thành khi các kiểm tra ngoài và OAuth thật đã đạt. 77 tests cục bộ không thay thế nghiệm thu này.
+- Chỉ đánh dấu hoàn thành khi các kiểm tra ngoài và OAuth thật đã đạt. 78 tests cục bộ không thay thế nghiệm thu này.
 
 ## Backup và giám sát
 
