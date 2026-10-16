@@ -7,6 +7,7 @@ import {
   Trash2,
   ChartNoAxesCombined,
   Settings,
+  UsersRound,
   Menu,
   RefreshCw,
   LogOut,
@@ -31,6 +32,7 @@ import { Planning } from "./Planning";
 import { Orders } from "./Orders";
 import { Sales } from "./Sales";
 import { SettingsPage } from "./Settings";
+import { AccountsPage } from "./Accounts";
 export type Snapshot = {
   skus: Variant[];
   orders: ProductionOrder[];
@@ -44,6 +46,7 @@ const pages = [
   { id: "history", name: "Lịch sử & giao nhận", icon: History },
   { id: "sales", name: "Phân tích bán hàng", icon: ChartNoAxesCombined },
   { id: "archived", name: "Lệnh đã xóa", icon: Trash2 },
+  { id: "accounts", name: "Thiết lập tài khoản", icon: UsersRound },
   { id: "settings", name: "Cấu hình & dữ liệu", icon: Settings },
 ];
 export default function App() {
@@ -379,8 +382,21 @@ export default function App() {
               navigate={navigate}
             />
           )}
+          {page === "accounts" && (
+            <AccountsPage
+              run={run}
+              role={user.role}
+              busy={busy}
+              onSetup={() => navigate("settings")}
+            />
+          )}
           {page === "settings" && (
-            <SettingsPage run={run} role={user.role} busy={busy} />
+            <SettingsPage
+              run={run}
+              role={user.role}
+              busy={busy}
+              onAccounts={() => navigate("accounts")}
+            />
           )}
         </main>
         <footer className="app-footer">

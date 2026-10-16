@@ -40,7 +40,7 @@ export async function bootstrapInitialAdmin(db: DB, userId: string) {
   const account = await initialAdminStatus(db, userId);
   if (!account?.bootstrapEligible) return false;
   const updated = await db.query(
-    "UPDATE users SET role='Administrator' WHERE id=$1 AND NOT disabled RETURNING id",
+    "UPDATE users SET role='Administrator',version=version+1 WHERE id=$1 AND NOT disabled RETURNING id",
     [userId],
   );
   if (updated.rowCount !== 1) return false;

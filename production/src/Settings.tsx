@@ -1,21 +1,23 @@
 import { useState, useEffect } from "react";
 import { Upload, ShieldCheck, Link, Database, Download } from "lucide-react";
 import { api, send } from "./api";
-import { roles, type Role } from "../shared/domain";
+import { AccountsPage } from "./Accounts";
+import { type Role } from "../shared/domain";
 import { Notice, Modal, Empty, Field, vnDate, type Run } from "./ui";
 export function SettingsPage({
   run,
   role,
   busy,
+  onAccounts,
 }: {
   run: Run;
   role: Role;
   busy: boolean;
+  onAccounts?: () => void;
 }) {
   const [tab, setTab] = useState("setup"),
     [config, setConfig] = useState<any>({}),
     [account, setAccount] = useState<any>(null),
-    [users, setUsers] = useState<any[]>([]),
     [logs, setLogs] = useState<any[]>([]),
     [preview, setPreview] = useState<any>(null),
     [base, setBase] = useState<any>(null),
@@ -29,9 +31,6 @@ export function SettingsPage({
       .then(setConfig)
       .catch((e) => setError(e.message));
     if (admin) {
-      void api("/api/users")
-        .then(setUsers)
-        .catch((e) => setError(e.message));
       void api("/api/logs")
         .then(setLogs)
         .catch((e) => setError(e.message));
@@ -61,7 +60,9 @@ export function SettingsPage({
             <button
               key={id}
               className={tab === id ? "active" : ""}
-              onClick={() => setTab(id)}
+              onClick={() =>
+                id === "users" && onAccounts ? onAccounts() : setTab(id)
+              }
             >
               {label}
             </button>
@@ -277,42 +278,7 @@ export function SettingsPage({
         </section>
       )}
       {tab === "users" && admin && (
-        <section className="panel">
-          <div className="panel-title">
-            <h2>Người dùng và vai trò</h2>
-          </div>
-          <Notice>
-            Người đăng nhập Lark lần đầu mặc định Viewer. Chỉ Administrator được
-            cấp quyền; không thể gỡ quản trị viên cuối cùng.
-          </Notice>
-          {users.length ? (
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Người dùng</th>
-                    <th>Vai trò</th>
-                    <th>Truy cập</th>
-                    <th>Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <UserRow
-                      key={u.id + "-" + u.role + "-" + u.disabled}
-                      user={u}
-                      busy={busy}
-                      run={run}
-                      reload={async () => setUsers(await api("/api/users"))}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <Empty>Chưa có người dùng.</Empty>
-          )}
-        </section>
+        <AccountsPage role={role} busy={busy} run={run} />
       )}
       {tab === "logs" && admin && (
         <section className="panel">
@@ -399,61 +365,5 @@ export function SettingsPage({
         </Modal>
       )}
     </>
-  );
-}
-function UserRow({
-  user,
-  busy,
-  run,
-  reload,
-}: {
-  user: any;
-  busy: boolean;
-  run: Run;
-  reload: () => Promise<void>;
-}) {
-  const [role, setRole] = useState(user.role),
-    [disabled, setDisabled] = useState(user.disabled);
-  return (
-    <tr>
-      <td>
-        {user.name}
-        <small>{user.open_id}</small>
-      </td>
-      <td>
-        <select
-          aria-label={"Vai trò " + user.name}
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-        >
-          {roles.map((r) => (
-            <option key={r}>{r}</option>
-          ))}
-        </select>
-      </td>
-      <td>
-        <label className="check-label">
-          <input
-            type="checkbox"
-            checked={disabled}
-            onChange={(e) => setDisabled(e.target.checked)}
-          />
-          Vô hiệu hóa
-        </label>
-      </td>
-      <td>
-        <button
-          disabled={busy || (role === user.role && disabled === user.disabled)}
-          onClick={() =>
-            void run(async () => {
-              await send("/api/users/" + user.id, { role, disabled }, "PUT");
-              await reload();
-            })
-          }
-        >
-          Lưu quyền
-        </button>
-      </td>
-    </tr>
   );
 }

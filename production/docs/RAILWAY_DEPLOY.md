@@ -150,3 +150,5 @@ Có thể xác nhận reason trong Deploy Logs bằng `Lark access denied`. Fing
 ## Đã đăng nhập nhưng không có nút tạo/sửa
 
 Nhìn vai trò ở góc trên: Viewer chỉ xem. Thực hiện [đối chiếu V9 và khởi tạo Administrator đầu tiên](V9_BUTTON_AUDIT.md), sau đó cấp vai trò nhân viên tại Phân quyền. Không thay role bằng SQL trực tiếp, không bật DEV_AUTH trên Railway và không tự cấp Admin cho người đầu tiên đăng nhập.
+
+Quản lý thành viên sau khi có Administrator: [ACCOUNT_MANAGEMENT.md](ACCOUNT_MANAGEMENT.md). Deployment mới tự áp dụng migration 005, không cần nhập lại dữ liệu hay Secret.

@@ -25,7 +25,6 @@ import {
   AppError,
   policySchema,
   stages,
-  roles,
   totals,
   sizes,
 } from "../shared/domain";
@@ -39,6 +38,7 @@ import {
   confirmV9,
   readFileRows,
 } from "./imports";
+import { listUsers, createUser, updateUser, userAccessHistory } from "./users";
 const PgStore = connectPg(session);
 export function makeApp() {
   const app = express(),
@@ -424,52 +424,22 @@ export function makeApp() {
   app.get("/api/suppliers", async (_req, res) =>
     res.json((await pool.query("SELECT * FROM suppliers ORDER BY name")).rows),
   );
-  app.get("/api/users", permission("admin"), async (_req, res) =>
-    res.json(
-      (
-        await pool.query(
-          "SELECT id,name,role,disabled,open_id,tenant_key FROM users ORDER BY name",
-        )
-      ).rows,
-    ),
+  app.get("/api/users", permission("admin"), async (req, res) =>
+    res.json(await listUsers(pool, req.actor!.id)),
+  );
+  app.get("/api/users/activity", permission("admin"), async (req, res) =>
+    res.json(await userAccessHistory(pool, req.actor!.id)),
+  );
+  app.post("/api/users", permission("admin"), async (req, res) =>
+    res
+      .status(201)
+      .json(await transaction((db) => createUser(db, req.actor!.id, req.body))),
   );
   app.put("/api/users/:id", permission("admin"), async (req, res) => {
-    const { role, disabled } = z
-      .object({ role: z.enum(roles), disabled: z.boolean() })
-      .strict()
-      .parse(req.body);
     const id = z.uuid().parse(req.params.id);
-    await transaction(async (db) => {
-      await db.query(
-        "SELECT pg_advisory_xact_lock(hashtext('comsflow:roles'))",
-      );
-      const old = (
-        await db.query("SELECT * FROM users WHERE id=$1 FOR UPDATE", [id])
-      ).rows[0];
-      if (!old) throw new AppError(404, "Không có người dùng");
-      if (
-        old.role === "Administrator" &&
-        !old.disabled &&
-        (disabled || role !== "Administrator") &&
-        (
-          await db.query(
-            "SELECT 1 FROM users WHERE role='Administrator' AND NOT disabled AND id<>$1",
-            [id],
-          )
-        ).rowCount === 0
-      )
-        throw new AppError(409, "Không thể gỡ quản trị viên cuối cùng");
-      await db.query("UPDATE users SET role=$2,disabled=$3 WHERE id=$1", [
-        id,
-        role,
-        disabled,
-      ]);
-      await audit(db, req.actor!.id, "user.update", id, {
-        before: { role: old.role, disabled: old.disabled },
-        after: { role, disabled },
-      });
-    });
-    res.json({ ok: true });
+    res.json(
+      await transaction((db) => updateUser(db, req.actor!.id, id, req.body)),
+    );
   });
   app.get("/api/logs", permission("admin"), async (_req, res) =>
     res.json(

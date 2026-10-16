@@ -84,3 +84,7 @@ V9 không có database, API, giao dịch nhiều người dùng, Lark login, RBA
 | Vận hành | `production/docs/DEPLOYMENT.md`, Dockerfile, scripts | Local build/API/browser đã kiểm tra; deployment HTTPS, publication và fresh-task restoration chưa xác minh |
 
 Xem `production/README.md` cho cách chạy và `production/docs/TESTING.md` cho bằng chứng và giới hạn. Không coi trạng thái tích hợp bên ngoài là hoàn thành chỉ vì có code hoặc mock.
+
+## Thiết lập tài khoản bổ sung
+
+Trang riêng quản lý thành viên, tạo Admin/thành viên bằng danh tính Lark, 5 vai trò, khóa/mở và audit: [ACCOUNT_MANAGEMENT.md](production/docs/ACCOUNT_MANAGEMENT.md). Đây là chức năng mới cho nhiều người dùng; không thay đổi công thức hoặc workflow V9.

@@ -1388,3 +1388,5 @@ summary {
   max-width: min(680px, calc(100vw - 32px));
   z-index: 90;
 }
+
+.account-identifier { display:block; overflow-wrap:anywhere; max-width:340px; margin-top:6px; }

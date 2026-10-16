@@ -2,10 +2,10 @@
 
 ## Đã chạy trên môi trường hiện tại
 
-- Node.js 24.19.0, npm 11.9.0, PostgreSQL 17 trong Docker; migrations 001–004.
+- Node.js 24.19.0, npm 11.9.0, PostgreSQL 17 trong Docker; migrations 001–005.
 - `npm run build`: TypeScript và Vite build thành công. Tailwind biên dịch cục bộ; không cần CDN giao diện V9.
 - `npm ci` theo lockfile chạy lại thành công. Sau cài lại, đã khởi động lại Vite để làm mới dependency optimization (server đang chạy trước đó trả 504 cho cache cũ), rồi xác minh login/logout DEV và API trả 401 sau logout.
-- `npm test`: **95 tests passed, 8 files**, không có test skip. 23 tests domain, 33 tests integration PostgreSQL/HTTP và 17 tests Lark mock/security, 10 tests cấu hình origin/callback, 3 tests lọc log 2 tests SDK/web OAuth với transport giả lập và 7 tests bootstrap Administrator.
+- `npm test`: **107 tests passed, 9 files**, không có test skip. 23 tests domain, 33 tests integration PostgreSQL/HTTP và 18 tests Lark mock/security, 10 tests cấu hình origin/callback, 3 tests lọc log 2 tests SDK/web OAuth với transport giả lập 7 tests bootstrap Administrator và 11 tests quản lý thành viên.
 - Công thức: một test đối chiếu 400 đầu vào với chính hàm calc V9 trích nguyên văn, kiểm tra need/sale/raw/target/cover/flag. Có test riêng ví dụ 60, làm tròn, ngày chờ opt-in, thiếu tồn, bất thường và bốn vòng đời.
 - Giao dịch: nhiều màu/size, nhận 300+450+250 từ 1.000; chặn vượt nhận; idempotency đồng thời; sửa sau nhận, không giảm dưới đã nhận, không đổi SKU/xóa dòng nhận; revision trước/sau; hai người sửa cùng version; xóa/khôi phục; hủy và reopen; giữ mã đã dùng; trigger bất biến.
 - Import: CSV và XLSX thật, preview chưa ghi báo cáo, confirm lặp, replace giữ nguồn cũ, append bỏ trùng và khóa khi thiếu line ID, bỏ ngày xuất chưa đủ, chuyển bán giữ tồn/inbound/vòng đời/test. JSON V9: phát hiện trùng/số nhận lệch, giữ tồn unknown, không seed sales cũ; nhập lệnh đã xóa có 2 biên nhận và nguồn editLog, nhập bản nháp giữ trạng thái.
@@ -79,3 +79,11 @@ File V9 gửi lại khớp SHA với bản gốc. 7 tests mới kiểm tra thi�
 Chromium với database tổng hợp `_test` riêng xác minh Administrator/Planner thấy tạo lệnh và thêm SKU, Viewer/Warehouse không tạo được; Viewer thấy cảnh báo đúng quyền và thông tin tài khoản của chính mình; không có nút kích hoạt khi chưa được chủ hosting chỉ định. Mobile 390px không tràn và không lỗi JavaScript. Chỉ đổi role của fixture DEV trong database test để kiểm tra UI, không sửa tài khoản Lark thật hoặc lệnh thật.
 
 Đã bấm nút bootstrap trong Chromium bằng danh tính tổng hợp được cấu hình trên backend test: trước là Viewer, sau request thành công và reload là Administrator; nút tạo lệnh và tab Phân quyền xuất hiện; nút khởi tạo biến mất. Đây không phải cấp quyền cho tài khoản công ty trên Railway.
+
+## Trang Thiết lập tài khoản
+
+107 tests đạt; 11 tests mới kiểm tra tạo 5 vai trò, mặc định quyền hợp lệ/đúng tenant, chặn trùng Open ID và trường ngoài schema, đổi quyền với reason/version/audit, hai người cập nhật cùng version, bảo vệ admin cuối cùng (admin thay thế phải đăng nhập Lark), hai Admin hạ quyền đồng thời, thu hồi session khi khóa, mở lại giữ lịch sử, cách ly tenant và kiểm tra lại actor trong transaction. HTTP tests xác nhận anonymous/Viewer/CSRF bị chặn, Admin thêm và xem lịch sử được. Test Lark bổ sung xác nhận thành viên đã được thêm trước giữ vai trò sau lần đăng nhập đầu, tên được xác minh từ Lark.
+
+Chromium đã thao tác thêm thành viên tổng hợp, đổi Planner→Manager, khóa, mở lại thành Viewer, đọc lý do trong audit, xem ma trận, chặn hạ admin cuối cùng bằng 409, kiểm tra 390px không tràn; sau đổi role fixture sang Viewer chỉ còn hồ sơ của mình, API danh sách thành viên trả 403. Không có page errors. Lần smoke đầu dừng ở locator get_by_label của select; đã đổi sang combobox theo accessible name rồi chạy đầy đủ thành công. Dữ liệu và tài khoản đều ở database tổng hợp _test, không thay đổi tài khoản công ty trên Railway.
+
+Đã diễn tập khởi động production trên database thử trống: 5 migrations tự áp dụng, health 200, anonymous 401, restart không lặp SQL đã áp dụng và database không kết nối khiến app thoát trước listen với log đã lọc. Không cần thêm quyền đọc danh bạ Lark cho chức năng này.

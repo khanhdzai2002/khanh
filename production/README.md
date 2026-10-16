@@ -34,7 +34,7 @@ npm test
 
 Nếu không đặt TEST_DATABASE_URL, runner lấy DATABASE_URL và thêm hậu tố `_test`; không tự tạo database và không bao giờ dùng database chính để reset. Tests truncate dữ liệu trong database test. Không chạy tests đồng thời với smoke UI trên cùng database.
 
-Có 95 tests, gồm 400 trường hợp đối chiếu công thức với hàm V9 nguyên gốc trong một test. Xem [bằng chứng và giới hạn kiểm thử](docs/TESTING.md).
+Có 107 tests, gồm 400 trường hợp đối chiếu công thức với hàm V9 nguyên gốc trong một test. Xem [bằng chứng và giới hạn kiểm thử](docs/TESTING.md).
 
 ## Tài liệu bàn giao
 
@@ -49,6 +49,10 @@ Có 95 tests, gồm 400 trường hợp đối chiếu công thức với hàm V
 ## Nếu không thấy nút tạo/sửa
 
 Kiểm tra vai trò ở góc trên. Viewer chỉ xem; xem [đối chiếu V9 và cách chỉ định Administrator đầu tiên](docs/V9_BUTTON_AUDIT.md). Không cần sửa SQL hoặc cấp admin cho mọi người.
+
+## Thiết lập tài khoản
+
+Sidebar **Thiết lập tài khoản**: thêm thành viên Lark, cấp 5 vai trò (kể cả Administrator), khóa/mở, tìm kiếm/lọc và lịch sử phân quyền. Xem [hướng dẫn quản lý tài khoản](docs/ACCOUNT_MANAGEMENT.md).
 
 ## Những gì đã có
 

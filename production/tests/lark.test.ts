@@ -315,6 +315,47 @@ it("callback mock từ tenant khác bị từ chối", async () => {
   ).toBe("tenant_mismatch");
   expect(process.env.LARK_TENANT_KEY).toBe("test-tenant");
 });
+it("thành viên đã cấp vai trò trước giữ đúng quyền sau lần đăng nhập Lark đầu tiên", async () => {
+  config();
+  const openId = "ou_synthetic_preassigned_" + randomUUID();
+  const id = randomUUID();
+  await pool.query(
+    "INSERT INTO users(id,tenant_key,open_id,name,role) VALUES($1,$2,$3,$4,$5)",
+    [id, "test-tenant", openId, "Synthetic pending name", "Production Planner"],
+  );
+  mock.token.mockResolvedValue({ accessToken: "synthetic-provider-token" });
+  mock.info.mockResolvedValue({
+    code: 0,
+    data: {
+      open_id: openId,
+      tenant_key: "test-tenant",
+      name: "Synthetic verified Lark name",
+    },
+  });
+  const l = await login();
+  const response = await fetch(
+    base + "/auth/callback?state=" + l.state + "&code=synthetic",
+    { headers: { Cookie: l.cookie }, redirect: "manual" },
+  );
+  expect(response.status).toBe(302);
+  const cookie = response.headers.get("set-cookie")!.split(";")[0];
+  const me = await (
+    await fetch(base + "/api/me", { headers: { Cookie: cookie } })
+  ).json();
+  expect(me.user).toMatchObject({
+    id,
+    role: "Production Planner",
+    name: "Synthetic verified Lark name",
+  });
+  expect(
+    (
+      await pool.query(
+        "SELECT id FROM activity_logs WHERE actor_id=$1 AND action='auth.lark.login'",
+        [id],
+      )
+    ).rowCount,
+  ).toBe(1);
+});
 it("tenant key dư khoảng trắng đăng nhập đúng tenant mà không tự nâng quyền", async () => {
   config();
   process.env.LARK_TENANT_KEY = " \n test-tenant \t";

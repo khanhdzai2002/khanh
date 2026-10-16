@@ -9,7 +9,7 @@ if (!openId || !roles.includes(role as any) || !configuredTenantKey())
   );
 await transaction(async (db) => {
   const r = await db.query(
-    "UPDATE users SET role=$1 WHERE open_id=$2 AND tenant_key=$3 RETURNING id",
+    "UPDATE users SET role=$1,version=version+1 WHERE open_id=$2 AND tenant_key=$3 RETURNING id",
     [role, openId, configuredTenantKey()],
   );
   if (r.rowCount !== 1) throw Error("User must sign in first");
