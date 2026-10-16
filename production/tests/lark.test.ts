@@ -173,6 +173,39 @@ it("callback trình duyệt đưa về giao diện lỗi thay vì trang JSON", a
   );
   expect(mock.token).not.toHaveBeenCalled();
 });
+it("lỗi user_info được ghi đúng bước và không nhầm thành tenant sai", async () => {
+  config();
+  mock.token.mockResolvedValue({ accessToken: "synthetic-provider-token" });
+  mock.info.mockResolvedValue({
+    code: 99991672,
+    msg: "synthetic-unit-test-only private provider detail",
+  });
+  const log = vi.spyOn(console, "error").mockImplementation(() => {});
+  try {
+    const l = await login();
+    const response = await fetch(
+      base + "/auth/callback?state=" + l.state + "&code=synthetic",
+      {
+        headers: { Cookie: l.cookie },
+        redirect: "manual",
+      },
+    );
+    expect(response.status).toBe(502);
+    expect(log).toHaveBeenCalledWith(
+      "Lark OAuth failed",
+      expect.objectContaining({ stage: "user_info", providerCode: 99991672 }),
+    );
+    expect(JSON.stringify(log.mock.calls)).not.toContain(
+      "private provider detail",
+    );
+    expect(JSON.stringify(log.mock.calls)).not.toContain(
+      "synthetic-provider-token",
+    );
+    expect(await response.text()).not.toContain("private provider detail");
+  } finally {
+    log.mockRestore();
+  }
+});
 it("Redirect URL sai origin bị chặn trước khi bắt đầu OAuth", async () => {
   config();
   process.env.LARK_REDIRECT_URI = "https://other.invalid/auth/callback";

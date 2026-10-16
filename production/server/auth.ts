@@ -15,6 +15,7 @@ import { pool, audit, transaction } from "./db";
 import { AppError, can, type Role } from "../shared/domain";
 import type { Actor } from "./service";
 import { callbackUrl, larkStatus, publicOrigin } from "./config";
+import { larkFailureDetails } from "./lark-diagnostics";
 declare module "express-session" {
   interface SessionData {
     userId?: string;
@@ -161,6 +162,7 @@ auth.get("/callback", async (req, res) => {
     throw new AppError(400, "Lark không trả mã đăng nhập");
   const client = larkClient();
   let result;
+  let stage: "token_exchange" | "user_info" = "token_exchange";
   try {
     // Authorization codes are single-use: never automatically retry this exchange.
     const token = await client.accessToken.retrieveByAuthorizationCode({
@@ -168,23 +170,24 @@ auth.get("/callback", async (req, res) => {
       redirectUri: callbackUrl(),
       codeVerifier: attempt.code_verifier,
     });
-    if (!token.accessToken) throw Error("Missing provider token");
+    if (!token.accessToken) throw { code: "MISSING_ACCESS_TOKEN" };
+    stage = "user_info";
     result = await client.authen.userInfo.get(
       {},
       lark.withUserAccessToken(token.accessToken),
     );
-  } catch {
+    if (result.code !== 0) throw { code: result.code };
+    if (!result.data?.open_id || !result.data?.tenant_key)
+      throw { code: "INVALID_USER_INFO" };
+  } catch (error) {
+    console.error("Lark OAuth failed", larkFailureDetails(error, stage));
     throw new AppError(
       502,
       "Lark chưa xác thực được đăng nhập. Kiểm tra App ID, App Secret, Redirect URL và quyền ứng dụng.",
     );
   }
   const u = result.data;
-  if (
-    result.code !== 0 ||
-    !u?.open_id ||
-    u.tenant_key !== process.env.LARK_TENANT_KEY
-  )
+  if (!u?.open_id || u.tenant_key !== process.env.LARK_TENANT_KEY)
     throw new AppError(403, "Tài khoản không thuộc tenant được phép");
   const user = (
     await pool.query(
