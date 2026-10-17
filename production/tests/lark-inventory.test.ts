@@ -162,28 +162,24 @@ function client() {
   return {
     wiki: {
       space: {
-        getNode: vi
-          .fn()
-          .mockResolvedValue({
-            code: 0,
-            data: {
-              node: { obj_type: "bitable", obj_token: "SyntheticBase123" },
-            },
-          }),
+        getNode: vi.fn().mockResolvedValue({
+          code: 0,
+          data: {
+            node: { obj_type: "bitable", obj_token: "SyntheticBase123" },
+          },
+        }),
       },
     },
     bitable: {
       appTableField: {
-        list: vi
-          .fn()
-          .mockResolvedValue({
-            code: 0,
-            data: {
-              items: ["Mã sản phẩm", "Màu", "Ngày kiểm", "S", "M", "XXL"].map(
-                (field_name) => ({ field_name, type: 1 }),
-              ),
-            },
-          }),
+        list: vi.fn().mockResolvedValue({
+          code: 0,
+          data: {
+            items: ["Mã sản phẩm", "Màu", "Ngày kiểm", "S", "M", "XXL"].map(
+              (field_name) => ({ field_name, type: 1 }),
+            ),
+          },
+        }),
       },
       appTableRecord: {
         search: vi
@@ -443,4 +439,26 @@ it("inventory endpoints require session, Admin and CSRF; source reload persists 
   } finally {
     await new Promise<void>((ok) => server.close(() => ok()));
   }
+});
+
+it("allows first inventory import for catalogue SKUs with unknown stock despite a newer creation timestamp", async () => {
+  await tx((db) =>
+    saveSku(
+      db,
+      actor,
+      skuSchema.parse({
+        sku: "SYNTHETIC",
+        color: "Cam",
+        size: "M",
+        stock: null,
+        inventoryAt: "2026-10-17T00:00:00+07:00",
+      }),
+    ),
+  );
+  const config = await prepare(),
+    p = await preview(config);
+  expect(p.count).toBe(1);
+  expect(p.rows.find((r) => r.size === "M")?.action).toBe("update");
+  await tx((db) => confirmInventory(db, actor, p.id));
+  expect((await variants())[0].stock).toBe(12);
 });

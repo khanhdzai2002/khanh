@@ -200,7 +200,9 @@ export async function previewInventory(
   const rows = result.rows.map((r) => {
     const match = catalogue.get(key(r));
     const isOlder =
-      match?.body.inventoryAt &&
+      match &&
+      match.body.stock !== null &&
+      match.body.inventoryAt &&
       r.date <
         new Date(new Date(match.body.inventoryAt).getTime() + 7 * 3600000)
           .toISOString()
