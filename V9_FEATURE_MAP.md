@@ -96,3 +96,7 @@ Trang riêng quản lý thành viên, tạo Admin/thành viên bằng danh tính
 ### Tồn kho Lark Base
 
 Bổ sung nguồn tồn Wiki/Base, ánh xạ mã–màu và size ngang, ngày mới nhất theo mã–màu, ô trống bằng 0 theo xác nhận người dùng; preview/confirm tập trung, snapshot/audit/version. Không thay công thức V9 hoặc inbound/lifecycle. Xem `production/docs/LARK_INVENTORY.md`.
+
+### Thao tác nhanh kế hoạch
+
+Tồn Lark theo SKU đã chọn; đang về đối soát từ phần còn chờ của lệnh, thay thế không cộng dồn; lên lệnh nhanh từng SKU/nhóm đã chọn với số đề xuất V9. Giữ preview/confirm, audit/version/idempotency và không tự gửi xưởng. Xem `production/docs/PLANNING_ACTIONS.md`.

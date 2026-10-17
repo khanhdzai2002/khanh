@@ -17,6 +17,7 @@ import {
   type Variant,
   type Policy,
 } from "../shared/domain";
+import { SupplyActions } from "./SupplyActions";
 import type { Snapshot } from "./App";
 import { send, fileBase64 } from "./api";
 import { Empty, Modal, Field, Notice, fmt, type Run } from "./ui";
@@ -35,7 +36,7 @@ export function Planning({
   run: Run;
   busy: boolean;
   writable: boolean;
-  createOrder: () => void;
+  createOrder: (rows?: Variant[]) => void;
 }) {
   const [query, setQuery] = useState(""),
     [onlyNeed, setOnlyNeed] = useState(false),
@@ -211,6 +212,45 @@ export function Planning({
               Áp dụng
             </button>
             <small>Không tự đổi vòng đời theo tín hiệu bán.</small>
+          </div>
+        )}
+        <SupplyActions
+          ids={(selected.length
+            ? rows.filter((s) => selected.includes(s.id))
+            : rows
+          ).map((s) => s.id)}
+          run={run}
+          busy={busy}
+          writable={writable}
+        />
+        {writable && (
+          <div className="bulkbar">
+            <button
+              className="primary"
+              disabled={
+                busy ||
+                !(
+                  selected.length
+                    ? rows.filter((s) => selected.includes(s.id))
+                    : rows
+                ).some((s) => forecast(s, data.policy).need > 0)
+              }
+              onClick={() =>
+                createOrder(
+                  (selected.length
+                    ? rows.filter((s) => selected.includes(s.id))
+                    : rows
+                  ).filter((s) => forecast(s, data.policy).need > 0),
+                )
+              }
+            >
+              Lên lệnh nhanh
+            </button>
+            <small>
+              Mở lệnh với số đề xuất của SKU đã chọn; nếu chưa chọn, lấy các SKU
+              đang xem có nhu cầu. Cập nhật tồn và đối soát hàng đang về trước
+              khi lên lệnh. Chưa lưu hoặc gửi xưởng.
+            </small>
           </div>
         )}
         {rows.length ? (
@@ -431,6 +471,15 @@ export function Planning({
                       <td>
                         {writable && (
                           <button
+                            disabled={busy || f.need <= 0}
+                            onClick={() => createOrder([s])}
+                            aria-label={`Lên lệnh nhanh ${s.sku} ${s.color} ${s.size}`}
+                          >
+                            Lên lệnh nhanh
+                          </button>
+                        )}
+                        {writable && (
+                          <button
                             disabled={busy}
                             aria-label={"Xóa SKU " + s.id}
                             onClick={() => {
@@ -469,7 +518,7 @@ export function Planning({
             <button
               className="primary"
               disabled={!selectionTotal || busy}
-              onClick={createOrder}
+              onClick={() => createOrder()}
             >
               Đưa vào lệnh <ArrowRight size={16} />
             </button>
@@ -478,7 +527,8 @@ export function Planning({
       </section>
       <Notice>
         “Hàng đang về” chỉ trừ một lần trong dự báo. Giao nhận xưởng không tự
-        tăng tồn hoặc giảm hàng đang về; cần đối soát kho trước khi cập nhật.
+        tăng tồn; bấm Đối soát hàng đang về sau mỗi lần nhận để cập nhật phần
+        còn chờ, và đối soát kho trước khi cập nhật tồn thực tế.
       </Notice>
       {adding && (
         <AddSku run={run} busy={busy} onClose={() => setAdding(false)} />

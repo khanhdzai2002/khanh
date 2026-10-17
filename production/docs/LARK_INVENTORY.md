@@ -45,7 +45,7 @@ Không cần biến môi trường Base mới cho luồng này: URL, ánh xạ v
 - Lưu inventoryAt theo **ngày kiểm**, inventorySource có table/record ID. Preview lưu thời điểm đọc; audit lưu nguồn/ánh xạ/người xác nhận/giá trị tồn trước và sau; snapshot giữ từng lần cập nhật.
 - Preview chỉ thuộc người tạo, hết hiệu lực sau 15 phút. Nó là bản chụp lúc đọc, không phải số tồn Lark trực tiếp tại lúc xác nhận. Nếu Lark vừa sửa, đóng preview và đọc lại.
 - Confirm trong transaction, kiểm tra phiên bản nguồn và từng SKU, khóa dòng theo thứ tự; xung đột rollback toàn bộ và yêu cầu xem trước lại. Không có việc sửa một phần mà báo hoàn tất.
-- Chỉ Administrator có quyền cấu hình/đọc/xác nhận. Có session, CSRF, Origin validation và giới hạn đọc Lark 5 lần/phút/IP; các lần đọc API có timeout/retry hữu hạn.
+- Chỉ Administrator cấu hình nguồn và nhập toàn bộ Base từ phần thiết lập. Administrator/Production Planner được đọc và xác nhận tồn của các SKU đã chọn trong Dự kiến sản xuất; Planner phải gửi phạm vi SKU, không thay nguồn hoặc nhập toàn bộ Base. Có session, CSRF, Origin validation và giới hạn đọc Lark 5 lần/phút/IP; các lần đọc API có timeout/retry hữu hạn.
 
 ## 4. Chẩn đoán
 
@@ -63,3 +63,7 @@ Không có credential Lark/Railway thực trong môi trường phát triển nê
 - [Base field list](https://open.larksuite.com/document/uAjLw4CM/ukTMukTMukTM/reference/bitable-v1/app-table-field/list).
 - [Base record search](https://open.larksuite.com/document/uAjLw4CM/ukTMukTMukTM/reference/bitable-v1/app-table-record/search): API hiện hành, phân trang 500 và quyền nâng cao.
 - [Cloud document permissions](https://open.larksuite.com/document/ukTMukTMukTM/uczNzUjL3czM14yN3MTN).
+
+## Thao tác trong dự kiến sản xuất
+
+Đã có nút cập nhật tồn theo SKU, đối soát đang về từ lệnh và lên lệnh nhanh. Xem [hướng dẫn thao tác](PLANNING_ACTIONS.md).

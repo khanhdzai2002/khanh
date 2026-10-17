@@ -462,3 +462,124 @@ it("allows first inventory import for catalogue SKUs with unknown stock despite 
   await tx((db) => confirmInventory(db, actor, p.id));
   expect((await variants())[0].stock).toBe(12);
 });
+
+it("planning inventory scope updates selected SKU only and never creates unrelated catalogue rows", async () => {
+  const m = await seed();
+  const s = await tx((db) =>
+    saveSku(
+      db,
+      actor,
+      skuSchema.parse({
+        sku: "SYNTHETIC",
+        color: "Cam",
+        size: "S",
+        stock: 99,
+        inventoryAt: "2026-10-14T00:00:00+07:00",
+      }),
+    ),
+  );
+  const config = await prepare(true);
+  const p = await tx((db) =>
+    previewInventory(
+      db,
+      actor,
+      config.source,
+      config.version,
+      normalizeInventory([record("r")], config.source),
+      [m],
+    ),
+  );
+  expect(p.rows).toHaveLength(1);
+  expect(p.count).toBe(1);
+  expect(p.rows[0].size).toBe("M");
+  await tx((db) => confirmInventory(db, actor, p.id));
+  const all = await variants();
+  expect(all).toHaveLength(2);
+  expect(all.find((v) => v.id === m)?.stock).toBe(12);
+  expect(all.find((v) => v.id === s)?.stock).toBe(99);
+});
+it("unmatched selected SKU stays unchanged and missing/deleted selection is rejected", async () => {
+  const id = await tx((db) =>
+    saveSku(
+      db,
+      actor,
+      skuSchema.parse({
+        sku: "SYNTHETIC-OTHER",
+        color: "Cam",
+        size: "M",
+        stock: 44,
+      }),
+    ),
+  );
+  const config = await prepare();
+  const result = normalizeInventory([record("r")], config.source);
+  const p = await tx((db) =>
+    previewInventory(db, actor, config.source, config.version, result, [id]),
+  );
+  expect(p.rows).toEqual([]);
+  expect(p.count).toBe(0);
+  expect(p.warnings.join()).toContain("giữ nguyên");
+  expect((await variants())[0].stock).toBe(44);
+  await expect(
+    tx((db) =>
+      previewInventory(db, actor, config.source, config.version, result, [
+        randomUUID(),
+      ]),
+    ),
+  ).rejects.toThrow("SKU đã thay đổi");
+});
+it("Planner may confirm own scoped stock preview but cannot configure Base or read whole source", async () => {
+  const id = await seed(),
+    config = await prepare();
+  const server = makeApp().listen(0, "127.0.0.1");
+  await new Promise<void>((ok) => server.once("listening", ok));
+  const base = "http://127.0.0.1:" + (server.address() as any).port;
+  try {
+    const login = await fetch(base + "/auth/dev", {
+      method: "POST",
+      headers: { Origin: process.env.PUBLIC_URL! },
+    });
+    const cookie = login.headers.get("set-cookie")!.split(";")[0];
+    const me = await (
+      await fetch(base + "/api/me", { headers: { Cookie: cookie } })
+    ).json();
+    await pool.query("UPDATE users SET role='Production Planner' WHERE id=$1", [
+      me.user.id,
+    ]);
+    const post = (url: string, body: any) =>
+      fetch(base + url, {
+        method: "POST",
+        headers: {
+          Cookie: cookie,
+          Origin: process.env.PUBLIC_URL!,
+          "Content-Type": "application/json",
+          "X-CSRF-Token": me.csrf,
+        },
+        body: JSON.stringify(body),
+      });
+    expect(
+      (await post("/api/lark/inventory/source", { source, version: 1 })).status,
+    ).toBe(403);
+    expect((await post("/api/lark/inventory/preview", {})).status).toBe(403);
+    expect(
+      (await post("/api/lark/inventory/preview", { ids: [id, id] })).status,
+    ).toBe(400);
+    const owner = { ...actor, id: me.user.id, role: "Production Planner" };
+    const p = await tx((db) =>
+      previewInventory(
+        db,
+        owner,
+        config.source,
+        config.version,
+        normalizeInventory([record("r")], config.source),
+        [id],
+      ),
+    );
+    expect((await post(`/api/lark/inventory/${p.id}/confirm`, {})).status).toBe(
+      200,
+    );
+    expect((await variants())[0].stock).toBe(12);
+  } finally {
+    await new Promise<void>((ok) => server.close(() => ok()));
+  }
+});

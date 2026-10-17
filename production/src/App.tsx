@@ -368,13 +368,14 @@ export default function App() {
                 run={run}
                 busy={busy}
                 writable={planner}
-                createOrder={() => {
+                createOrder={(rows) => {
                   setDraftFrom(
-                    data.skus.filter(
-                      (s) =>
-                        selected.includes(s.id) &&
-                        forecast(s, data.policy).need > 0,
-                    ),
+                    rows ||
+                      data.skus.filter(
+                        (s) =>
+                          selected.includes(s.id) &&
+                          forecast(s, data.policy).need > 0,
+                      ),
                   );
                   navigate("orders");
                 }}

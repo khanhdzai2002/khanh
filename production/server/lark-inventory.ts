@@ -177,6 +177,7 @@ export async function previewInventory(
   source: InventorySource,
   version: number,
   result: Awaited<ReturnType<typeof readInventory>>,
+  scope?: string[],
 ) {
   const current = await inventorySource(db);
   if (
@@ -197,7 +198,18 @@ export async function previewInventory(
     warnings = [...result.warnings];
   let unknown = 0,
     older = 0;
-  const rows = result.rows.map((r) => {
+  if (
+    scope &&
+    variants.filter((v) => scope.includes(v.id)).length !== scope.length
+  )
+    throw new AppError(409, "SKU đã thay đổi; hãy tải lại dữ liệu");
+  const sourceRows = scope
+    ? result.rows.filter((r) => {
+        const match = catalogue.get(key(r));
+        return match && scope.includes(match.id);
+      })
+    : result.rows;
+  const rows = sourceRows.map((r) => {
     const match = catalogue.get(key(r));
     const isOlder =
       match &&
@@ -224,6 +236,13 @@ export async function previewInventory(
       action,
     };
   });
+  if (scope) {
+    const missing = scope.filter((id) => !rows.some((row) => row.id === id));
+    if (missing.length)
+      warnings.push(
+        `${missing.length} SKU được chọn không có số tồn phù hợp trong view Lark: giữ nguyên, không tự đưa về 0.`,
+      );
+  }
   if (unknown)
     warnings.push(
       `${unknown} SKU chưa có trong danh mục: bỏ qua. Có thể bật tạo SKU còn thiếu rồi xem trước lại.`,
@@ -243,6 +262,7 @@ export async function previewInventory(
     body = {
       source,
       sourceVersion: version,
+      scope: scope || null,
       rows,
       errors,
       warnings,

@@ -1672,3 +1672,6 @@ summary {
     font-size: 11px;
   }
 }
+
+.supply-actions { padding: 16px 20px; border-bottom: 1px solid #e5e7eb; flex-wrap: wrap; }
+.supply-actions small { color: #6b7280; }

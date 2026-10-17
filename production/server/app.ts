@@ -52,6 +52,7 @@ import {
   previewInventory,
   confirmInventory,
 } from "./lark-inventory";
+import { previewInbound, confirmInbound } from "./inbound";
 import { salesFileSchema } from "../shared/sales-file";
 const PgStore = connectPg(session);
 export function makeApp() {
@@ -506,6 +507,26 @@ export function makeApp() {
       ).rows,
     ),
   );
+  app.post(
+    "/api/planning/inbound/preview",
+    permission("plan"),
+    async (req, res) =>
+      res.json(
+        await transaction((db) => previewInbound(db, req.actor!, req.body)),
+      ),
+  );
+  app.post(
+    "/api/planning/inbound/:id/confirm",
+    permission("plan"),
+    async (req, res) => {
+      z.object({}).strict().parse(req.body);
+      res.json(
+        await transaction((db) =>
+          confirmInbound(db, req.actor!, z.uuid().parse(req.params.id)),
+        ),
+      );
+    },
+  );
   app.get(
     "/api/lark/inventory/source",
     permission("admin"),
@@ -544,24 +565,34 @@ export function makeApp() {
   );
   app.post(
     "/api/lark/inventory/preview",
-    permission("admin"),
+    permission("plan"),
     larkReadLimit,
     async (req, res) => {
-      z.object({}).strict().parse(req.body);
+      const { ids } = z
+        .object({ ids: z.array(z.uuid()).min(1).max(2000).optional() })
+        .strict()
+        .parse(req.body);
+      if (ids && new Set(ids).size !== ids.length)
+        throw new AppError(400, "SKU bị chọn trùng");
+      if (req.actor!.role !== "Administrator" && !ids)
+        throw new AppError(
+          403,
+          "Chọn SKU cần cập nhật trong bảng dự kiến sản xuất",
+        );
       const current = await inventorySource(pool);
       if (!current) throw new AppError(400, "Lưu cấu hình nguồn tồn kho trước");
       const { version, updatedAt, ...source } = current;
       const result = await readInventory(source);
       res.json(
         await transaction((db) =>
-          previewInventory(db, req.actor!, source, version, result),
+          previewInventory(db, req.actor!, source, version, result, ids),
         ),
       );
     },
   );
   app.post(
     "/api/lark/inventory/:id/confirm",
-    permission("admin"),
+    permission("plan"),
     async (req, res) => {
       const id = z.uuid().parse(req.params.id);
       z.object({}).strict().parse(req.body);
