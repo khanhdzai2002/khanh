@@ -61,7 +61,7 @@ Dashboard từ dữ liệu tập trung; CRUD SKU/nhiều màu-size/sửa bảng/
 ## Chưa hoàn thành / chưa xác minh bên ngoài
 
 - Người dùng xác nhận Custom App 1.0.0 đã Released và chọn Railway làm hosting chính. Chưa có quyền Railway, project, database Railway, URL HTTPS thật hoặc credential Lark để xác minh ngoài. Auth test dùng mock, không phải bằng chứng đăng nhập thật. Người dùng cung cấp cấu hình an toàn theo LARK_SETUP.md rồi cần kiểm tra trên desktop/mobile Lark thực tế.
-- Base adapter hiện chỉ đọc xem trước tối đa 100 bản ghi. Chưa có đồng bộ, mapping thực tế, phân trang toàn bộ Base hoặc thao tác ghi. Cần xác nhận nguồn chuẩn/quyền trước khi mở rộng; không ghi đè Base đang hoạt động.
+- Tồn kho Lark Base: cấu hình URL Wiki/Base và ánh xạ, đọc có phân trang theo view, xem trước rồi xác nhận cập nhật PostgreSQL có snapshot/audit/version/idempotency. Không ghi ngược Base, chưa có lịch đồng bộ tự động; quyền Base thật cần xác minh sau triển khai. Xem [hướng dẫn kết nối tồn kho](docs/LARK_INVENTORY.md).
 - Quy trình Manager phê duyệt là tùy chọn chưa bật/chưa triển khai. Không có hành động nào tuyên bố đã phê duyệt hoặc gửi tin tới xưởng.
 - Nhập tồn trong Dự kiến sản xuất; không tự cập nhật tồn khi nhận hàng. Không có đối soát kho tự động.
 - Chưa có TikTok Shop API, job queue, phân trang server cho mọi danh sách hoặc benchmark dữ liệu doanh nghiệp lớn. Giới hạn file 10 MB/100.000 dòng. Xem giới hạn triển khai trong DEPLOYMENT.md.

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Upload, ShieldCheck, Link, Database, Download } from "lucide-react";
+import { Upload, ShieldCheck, Link, Database } from "lucide-react";
 import { api, send } from "./api";
+import { LarkInventory } from "./LarkInventory";
 import { AccountsPage } from "./Accounts";
 import { type Role } from "../shared/domain";
 import { Notice, Modal, Empty, Field, vnDate, type Run } from "./ui";
@@ -20,7 +21,6 @@ export function SettingsPage({
     [account, setAccount] = useState<any>(null),
     [logs, setLogs] = useState<any[]>([]),
     [preview, setPreview] = useState<any>(null),
-    [base, setBase] = useState<any>(null),
     [error, setError] = useState("");
   const admin = role === "Administrator";
   useEffect(() => {
@@ -51,6 +51,7 @@ export function SettingsPage({
       <div className="tabs">
         {[
           ["setup", "Tích hợp & môi trường"],
+          ["inventory", "Tồn kho Lark Base"],
           ["v9", "Nhập dữ liệu V9"],
           ["users", "Phân quyền"],
           ["logs", "Nhật ký"],
@@ -207,32 +208,15 @@ export function SettingsPage({
                 diễn tập phục hồi.
               </p>
               {admin && (
-                <button
-                  disabled={busy}
-                  onClick={() =>
-                    void run(
-                      async () => setBase(await api("/api/lark/base/preview")),
-                      "Đã đọc bản xem trước Lark Base",
-                    )
-                  }
-                >
-                  <Download size={16} />
-                  Đọc thử Lark Base (không ghi)
+                <button onClick={() => setTab("inventory")}>
+                  Kết nối tồn kho Lark Base
                 </button>
-              )}
-              {base && (
-                <>
-                  <Notice>
-                    Kết nối chỉ đọc, tối đa 100 bản ghi. Chưa tự đồng bộ/ghi đè.
-                    Cần xác nhận ánh xạ và nguồn chuẩn trước khi nhập.
-                  </Notice>
-                  <pre>{JSON.stringify(base, null, 2)}</pre>
-                </>
               )}
             </section>
           </div>
         </>
       )}
+      {tab === "inventory" && admin && <LarkInventory run={run} busy={busy} />}
       {tab === "v9" && admin && (
         <section className="panel padded">
           <h2>Nhập bản sao lưu JSON V9</h2>

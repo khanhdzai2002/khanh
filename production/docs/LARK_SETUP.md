@@ -45,7 +45,7 @@ Lệnh chỉ cập nhật người dùng đã tồn tại trong LARK_TENANT_KEY 
 
 ## Lark Base — phạm vi hiện tại và nguồn chuẩn
 
-Khi cần kiểm tra Base, cấp thêm `LARK_BASE_APP_TOKEN` và `LARK_BASE_TABLE_ID`; cấp quyền đọc records đúng bảng trong console và chia sẻ Base cho app theo quy định của tenant. Adapter chỉ gọi `bitable.appTableRecord.list`, tối đa 100 bản ghi, có retry hữu hạn cho lỗi mạng tạm thời/rate limit. Chỉ Administrator bấm “Đọc thử Lark Base”; không tự chạy ở startup. Không có API ghi Base trong ứng dụng hiện tại.
+Tồn kho có luồng riêng: Administrator → Cấu hình & dữ liệu → Tồn kho Lark Base. Dán URL Wiki/Base, đọc cột, ánh xạ mã/màu/ngày và các size, lưu nguồn rồi xem trước → xác nhận cập nhật tồn. Không cần token Base nhập tay; cấu hình nguồn lưu PostgreSQL, API đọc sử dụng App ID/Secret backend hiện có. Cấp quyền Wiki/Base và quyền tài liệu theo [hướng dẫn tồn kho Lark Base](LARK_INVENTORY.md). Chưa có đồng bộ tự động hoặc ghi ngược vào Base.
 
 Ánh xạ sau là hợp đồng dự kiến để người phụ trách xác nhận, chưa áp dụng lên bảng thật:
 

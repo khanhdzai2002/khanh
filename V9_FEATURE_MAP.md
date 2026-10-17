@@ -92,3 +92,7 @@ Xem `production/README.md` cho cách chạy và `production/docs/TESTING.md` cho
 ## Thiết lập tài khoản bổ sung
 
 Trang riêng quản lý thành viên, tạo Admin/thành viên bằng danh tính Lark, 5 vai trò, khóa/mở và audit: [ACCOUNT_MANAGEMENT.md](production/docs/ACCOUNT_MANAGEMENT.md). Đây là chức năng mới cho nhiều người dùng; không thay đổi công thức hoặc workflow V9.
+
+### Tồn kho Lark Base
+
+Bổ sung nguồn tồn Wiki/Base, ánh xạ mã–màu và size ngang, ngày mới nhất theo mã–màu, ô trống bằng 0 theo xác nhận người dùng; preview/confirm tập trung, snapshot/audit/version. Không thay công thức V9 hoặc inbound/lifecycle. Xem `production/docs/LARK_INVENTORY.md`.

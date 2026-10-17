@@ -44,6 +44,14 @@ import {
 } from "./imports";
 import { listUsers, createUser, updateUser, userAccessHistory } from "./users";
 import { salesMatrix } from "../shared/sales-matrix";
+import {
+  inventorySource,
+  inventoryFields,
+  saveInventorySource,
+  readInventory,
+  previewInventory,
+  confirmInventory,
+} from "./lark-inventory";
 import { salesFileSchema } from "../shared/sales-file";
 const PgStore = connectPg(session);
 export function makeApp() {
@@ -497,6 +505,68 @@ export function makeApp() {
         )
       ).rows,
     ),
+  );
+  app.get(
+    "/api/lark/inventory/source",
+    permission("admin"),
+    async (_req, res) => res.json(await inventorySource(pool)),
+  );
+  app.post(
+    "/api/lark/inventory/source",
+    permission("admin"),
+    async (req, res) =>
+      res.json(
+        await transaction((db) =>
+          saveInventorySource(db, req.actor!, req.body),
+        ),
+      ),
+  );
+  const larkReadLimit = rateLimit({
+    windowMs: 60000,
+    limit: 5,
+    standardHeaders: "draft-8",
+    legacyHeaders: false,
+    message: {
+      message: "Đọc Lark tối đa 5 lần/phút; vui lòng đợi rồi thử lại",
+    },
+  });
+  app.post(
+    "/api/lark/inventory/fields",
+    permission("admin"),
+    larkReadLimit,
+    async (req, res) => {
+      const { url } = z
+        .object({ url: z.string().max(1000) })
+        .strict()
+        .parse(req.body);
+      res.json(await inventoryFields(url));
+    },
+  );
+  app.post(
+    "/api/lark/inventory/preview",
+    permission("admin"),
+    larkReadLimit,
+    async (req, res) => {
+      z.object({}).strict().parse(req.body);
+      const current = await inventorySource(pool);
+      if (!current) throw new AppError(400, "Lưu cấu hình nguồn tồn kho trước");
+      const { version, updatedAt, ...source } = current;
+      const result = await readInventory(source);
+      res.json(
+        await transaction((db) =>
+          previewInventory(db, req.actor!, source, version, result),
+        ),
+      );
+    },
+  );
+  app.post(
+    "/api/lark/inventory/:id/confirm",
+    permission("admin"),
+    async (req, res) => {
+      const id = z.uuid().parse(req.params.id);
+      z.object({}).strict().parse(req.body);
+      res.json(await transaction((db) => confirmInventory(db, req.actor!, id)));
+    },
   );
   app.get("/api/lark/base/preview", permission("admin"), async (_req, res) => {
     if (!process.env.LARK_BASE_APP_TOKEN || !process.env.LARK_BASE_TABLE_ID)
