@@ -12,7 +12,8 @@
     "test": "vitest run",
     "start": "tsx server/index.ts",
     "admin": "tsx server/admin.ts",
-    "deployment:check": "tsx scripts/deployment-check.ts"
+    "deployment:check": "tsx scripts/deployment-check.ts",
+    "sales:check": "tsx scripts/check-sales-file.ts"
   },
   "dependencies": {
     "@larksuiteoapi/node-sdk": "1.76.0",
@@ -24,10 +25,12 @@
     "express-rate-limit": "^8.0.0",
     "express-session": "^1.18.0",
     "helmet": "^8.1.0",
+    "jszip": "3.10.2",
     "lucide-react": "^0.468.0",
     "pg": "^8.16.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "saxes": "5.0.1",
     "zod": "^4.0.0"
   },
   "devDependencies": {

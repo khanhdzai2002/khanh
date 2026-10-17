@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Upload,
   Download,
@@ -7,6 +7,8 @@ import {
   FileSpreadsheet,
 } from "lucide-react";
 import { api, send, fileBase64 } from "./api";
+import { SalesMatrix } from "./SalesMatrix";
+import { salesMatrix, type MatrixVariant } from "../shared/sales-matrix";
 import { NumberInput } from "./Planning";
 import type { Snapshot } from "./App";
 import { skuSchema, forecast, stages, type Variant } from "../shared/domain";
@@ -25,6 +27,9 @@ export function Sales({
   busy: boolean;
   navigate: (p: string) => void;
 }) {
+  const detailRef = useRef<HTMLElement>(null);
+  const [view, setView] = useState("matrix");
+  const [reconcileKind, setReconcileKind] = useState("combo");
   const [report, setReport] = useState<any>(null),
     [error, setError] = useState(""),
     [from, setFrom] = useState(""),
@@ -65,21 +70,32 @@ export function Sales({
             .includes(search.toLowerCase())),
     ),
     sourceRows = (report?.rows || []).filter(
-      (r: any) => (!code || r.sku === code) && r.qty > 0,
+      (r: any) =>
+        (!code || r.sku === code) &&
+        r.qty > 0 &&
+        (!search ||
+          [r.sku, r.color, r.size, r.variation]
+            .join(" ")
+            .toLowerCase()
+            .includes(search.toLowerCase())),
     ),
     top = new Map<string, number>(),
-    colors = new Map<string, number>(),
     daily = new Map<string, number>();
   for (const r of sourceRows)
     if (r.kind === "single") {
       top.set(r.sku, (top.get(r.sku) || 0) + r.qty);
-      colors.set(
-        r.sku + " · " + r.color,
-        (colors.get(r.sku + " · " + r.color) || 0) + r.qty,
-      );
       daily.set(r.date, (daily.get(r.date) || 0) + r.qty);
     }
   const ranked = [...top].sort((a, b) => b[1] - a[1]);
+  const products = salesMatrix(rows);
+  const selectVariant = (r: MatrixVariant) => {
+    setCode(r.sku);
+    setSearch(r.color + " " + r.size);
+    setView("details");
+    requestAnimationFrame(() =>
+      detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
+  };
   const planRow = (r: any) =>
     data.skus.find(
       (s) =>
@@ -109,7 +125,9 @@ export function Sales({
         : send("/api/skus", body);
     });
   const reportExport = (format: string) =>
-    "/api/export/sales?" +
+    (view === "reconcile"
+      ? "/api/export/reconciliation?"
+      : "/api/export/sales?") +
     new URLSearchParams({
       ...(from ? { from } : {}),
       ...(to ? { to } : {}),
@@ -117,6 +135,8 @@ export function Sales({
       search,
       mode,
       format,
+      layout: view === "matrix" || view === "charts" ? "matrix" : "details",
+      ...(view === "reconcile" ? { bucket: reconcileKind } : {}),
     });
   const transfer = (selected: any[]) => {
     if (
@@ -159,11 +179,15 @@ export function Sales({
         <Field label="Mã sản phẩm">
           <select value={code} onChange={(e) => setCode(e.target.value)}>
             <option value="">Tất cả mã</option>
-            {[...new Set((report?.variants || []).map((r: any) => r.sku))].map(
-              (s: any) => (
-                <option key={s}>{s}</option>
+            {[
+              ...new Set(
+                [...(report?.variants || []), ...(report?.rows || [])].map(
+                  (r: any) => r.sku,
+                ),
               ),
-            )}
+            ].map((s: any) => (
+              <option key={s}>{s}</option>
+            ))}
           </select>
         </Field>
         <Field label="Từ ngày">
@@ -205,20 +229,21 @@ export function Sales({
       {!report && !error && <p>Đang tải báo cáo…</p>}
       {report && (
         <>
-          <div className="mini-kpis">
+          <div className="mini-kpis sales-kpis">
             {[
-              [
-                "SL bán lẻ",
-                sourceRows
-                  .filter((r: any) => r.kind === "single")
-                  .reduce((n: number, r: any) => n + r.qty, 0),
-              ],
-              ["Mã có bán", top.size],
+              ["SL bán lẻ", rows.reduce((n: number, r: any) => n + r.qty, 0)],
+              ["Mã có bán", products.length],
               ["SKU màu–size", rows.length],
               [
                 "Lượt combo",
                 sourceRows
                   .filter((r: any) => r.kind === "combo")
+                  .reduce((n: number, r: any) => n + r.qty, 0),
+              ],
+              [
+                "SL sản phẩm bị loại",
+                sourceRows
+                  .filter((r: any) => r.kind === "excluded")
                   .reduce((n: number, r: any) => n + r.qty, 0),
               ],
             ].map(([label, value]) => (
@@ -235,138 +260,7 @@ export function Sales({
               : "Chưa nhập file bán hàng"}{" "}
             · Ngày đầy đủ cuối: {report.lastFullDay || "—"}
           </div>
-          <div className="dashboard-grid">
-            <section className="panel">
-              <div className="panel-title">
-                <h2>Top mã sản phẩm</h2>
-              </div>
-              {ranked.length ? (
-                <div className="ranking">
-                  {ranked.slice(0, 10).map(([sku, qty], i) => (
-                    <div key={sku}>
-                      <span className="rank">
-                        {String(i + 1).padStart(2, "0")}
-                      </span>
-                      <div className="rank-info">
-                        <button
-                          className="link-button"
-                          onClick={() => setCode(sku)}
-                        >
-                          {sku}
-                        </button>
-                        <div className="bar">
-                          <i
-                            style={{ width: (qty / ranked[0][1]) * 100 + "%" }}
-                          />
-                        </div>
-                      </div>
-                      <strong>{fmt(qty)} sp</strong>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <Empty>
-                  Nhập file để phân tích; dữ liệu mẫu V9 không tự tính vào báo
-                  cáo hiện tại.
-                </Empty>
-              )}
-            </section>
-            <section className="panel">
-              <div className="panel-title">
-                <h2>Sản lượng theo ngày</h2>
-              </div>
-              <SalesChart
-                values={[...daily].sort((a, b) => a[0].localeCompare(b[0]))}
-              />
-            </section>
-          </div>
-          <section className="panel">
-            <div className="panel-title">
-              <h2>Top màu / phối màu</h2>
-            </div>
-            {colors.size ? (
-              <div className="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>Mã · Màu</th>
-                      <th>SL kỳ xem</th>
-                      <th>Tỷ trọng trong mã</th>
-                      <th>TB 2 ngày</th>
-                      <th>TB 7 ngày</th>
-                      <th>Xu hướng 2 vs 7 ngày</th>
-                      <th>Tín hiệu bán</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...colors]
-                      .sort((a, b) => b[1] - a[1])
-                      .slice(0, 30)
-                      .map(([color, qty], i) => {
-                        const variants = report.variants.filter(
-                            (r: any) => r.sku + " · " + r.color === color,
-                          ),
-                          r2 = variants.reduce(
-                            (n: number, r: any) => n + r.r2,
-                            0,
-                          ),
-                          r7 = variants.reduce(
-                            (n: number, r: any) => n + r.r7,
-                            0,
-                          ),
-                          total = top.get(variants[0]?.sku) || 0;
-                        return (
-                          <tr key={color}>
-                            <td>{i + 1}</td>
-                            <td className="color-cell">{color}</td>
-                            <td>{fmt(qty)}</td>
-                            <td>
-                              {total ? fmt((qty / total) * 100) + "%" : "—"}
-                            </td>
-                            <td>{fmt(r2)}</td>
-                            <td>{fmt(r7)}</td>
-                            <td>
-                              {r7 ? fmt(((r2 - r7) / r7) * 100) + "%" : "—"}
-                            </td>
-                            <td>
-                              <span className="badge orange">
-                                {trendSignal(r2, r7)}
-                              </span>
-                              {r7 > 0 && r2 / r7 > 2 && (
-                                <small>Kiểm tra campaign / viral</small>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <Empty>Chưa có màu bán hợp lệ.</Empty>
-            )}
-          </section>
-          <section className="panel">
-            <div className="panel-title">
-              <div>
-                <h2>Chi tiết bán đến từng size</h2>
-                <p>
-                  TB 2/7 ngày luôn lấy cửa sổ trọn vẹn gần nhất, độc lập bộ lọc
-                  kỳ xem như V9.
-                </p>
-              </div>
-              <div className="actions">
-                <a className="button" href={reportExport("csv")}>
-                  <Download size={16} />
-                  CSV
-                </a>
-                <a className="button" href={reportExport("xlsx")}>
-                  <Download size={16} />
-                  Excel
-                </a>
-              </div>
-            </div>
+          <section className="panel sales-report-controls">
             <div className="toolbar">
               <div className="search">
                 <Search size={16} />
@@ -395,208 +289,322 @@ export function Sales({
                 </button>
               )}
             </div>
-            {rows.length ? (
+            <div className="actions">
+              <a className="button" href={reportExport("csv")}>
+                <Download size={16} />
+                CSV
+              </a>
+              <a className="button" href={reportExport("xlsx")}>
+                <Download size={16} />
+                Excel
+              </a>
+            </div>{" "}
+            <div className="tabs">
+              {[
+                ["matrix", "Theo mã · màu · size"],
+                ["charts", "Biểu đồ"],
+                ["details", "Chi tiết & dự báo"],
+                ["reconcile", "Combo & loại trừ"],
+              ].map(([id, label]) => (
+                <button
+                  key={id}
+                  className={view === id ? "active" : ""}
+                  onClick={() => setView(id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </section>
+          {view === "charts" && (
+            <>
+              <div className="dashboard-grid">
+                <section className="panel">
+                  <div className="panel-title">
+                    <h2>Top mã sản phẩm</h2>
+                  </div>
+                  {ranked.length ? (
+                    <div className="ranking">
+                      {ranked.slice(0, 10).map(([sku, qty], i) => (
+                        <div key={sku}>
+                          <span className="rank">
+                            {String(i + 1).padStart(2, "0")}
+                          </span>
+                          <div className="rank-info">
+                            <button
+                              className="link-button"
+                              onClick={() => {
+                                setCode(sku);
+                                setView("matrix");
+                              }}
+                            >
+                              {sku}
+                            </button>
+                            <div className="bar">
+                              <i
+                                style={{
+                                  width: (qty / ranked[0][1]) * 100 + "%",
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <strong>{fmt(qty)} sp</strong>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <Empty>
+                      Nhập file để phân tích; dữ liệu mẫu V9 không tự tính vào
+                      báo cáo hiện tại.
+                    </Empty>
+                  )}
+                </section>
+                <section className="panel">
+                  <div className="panel-title">
+                    <h2>Sản lượng theo ngày</h2>
+                  </div>
+                  <SalesChart
+                    values={[...daily].sort((a, b) => a[0].localeCompare(b[0]))}
+                  />
+                </section>
+              </div>
+            </>
+          )}
+          {view === "matrix" && (
+            <SalesMatrix
+              products={products}
+              writable={writable}
+              busy={busy}
+              onVariant={selectVariant}
+              onTransfer={transfer}
+            />
+          )}
+          {view === "details" && (
+            <section className="panel" ref={detailRef}>
+              <div className="panel-title">
+                <div>
+                  <h2>Chi tiết bán đến từng size</h2>
+                  <p>
+                    TB 2/7 ngày luôn lấy cửa sổ trọn vẹn gần nhất, độc lập bộ
+                    lọc kỳ xem như V9.
+                  </p>
+                </div>
+              </div>
+              {rows.length ? (
+                <div className="table-scroll">
+                  <table>
+                    <thead>
+                      <tr>
+                        {[
+                          "Mã",
+                          "Màu",
+                          "Size",
+                          "SL kỳ xem",
+                          "Bán 2 ngày",
+                          "TB 2 ngày",
+                          "TB 7 ngày",
+                          "Tín hiệu bán",
+                          "Lưu ý",
+                          "Tồn thực tế",
+                          "Đang về",
+                          "Vòng đời",
+                          "SL test",
+                          "Đề xuất / Công thức",
+                          "Thao tác",
+                        ].map((s) => (
+                          <th key={s}>{s}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((r: any) => (
+                        <tr key={JSON.stringify([r.sku, r.color, r.size])}>
+                          <td className="product-code">{r.sku}</td>
+                          <td className="color-cell">{r.color}</td>
+                          <td>{r.size}</td>
+                          <td>{fmt(r.qty)}</td>
+                          <td>{fmt(r.q2)}</td>
+                          <td>{fmt(r.r2)}</td>
+                          <td>{fmt(r.r7)}</td>
+                          <td>
+                            <span className="badge orange">{r.signal}</span>
+                          </td>
+                          <td>
+                            {r.viral ? "Kiểm tra Mega Live / viral" : "—"}
+                          </td>
+                          <td>
+                            <NumberInput
+                              label={`Tồn bán hàng ${r.sku} ${r.color} ${r.size}`}
+                              value={planRow(r)?.stock ?? null}
+                              disabled={!writable || busy}
+                              nullable
+                              integer
+                              save={(stock) =>
+                                updatePlan(r, {
+                                  stock,
+                                  inventorySource: "Nhập thủ công",
+                                  inventoryAt: new Date().toISOString(),
+                                })
+                              }
+                            />
+                            {planRow(r)?.stock == null && (
+                              <small>CHƯA NHẬP TỒN</small>
+                            )}
+                          </td>
+                          <td>
+                            <NumberInput
+                              label={`Đang về bán hàng ${r.sku} ${r.color} ${r.size}`}
+                              value={planRow(r)?.inbound ?? 0}
+                              disabled={!writable || busy}
+                              integer
+                              save={(inbound) =>
+                                updatePlan(r, { inbound: inbound ?? 0 })
+                              }
+                            />
+                          </td>
+                          <td>
+                            <select
+                              aria-label={`Vòng đời bán hàng ${r.sku} ${r.color} ${r.size}`}
+                              disabled={!writable || busy}
+                              value={planRow(r)?.health || "Mở bán"}
+                              onChange={(e) =>
+                                void updatePlan(r, {
+                                  health: e.target.value as Variant["health"],
+                                })
+                              }
+                            >
+                              {stages.map((s) => (
+                                <option key={s}>{s}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            {!planRow(r) || planRow(r)?.health === "Mở bán" ? (
+                              <NumberInput
+                                label={`Test bán hàng ${r.sku} ${r.color} ${r.size}`}
+                                value={planRow(r)?.pilotQty ?? 0}
+                                disabled={!writable || busy}
+                                integer
+                                maximum={100000}
+                                save={(pilotQty) =>
+                                  updatePlan(r, { pilotQty: pilotQty ?? 0 })
+                                }
+                              />
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td>
+                            {(() => {
+                              const f = forecast(
+                                skuSchema.parse({
+                                  ...fields(r),
+                                  sku: r.sku,
+                                  color: r.color,
+                                  size: r.size,
+                                  day1: r.day1,
+                                  day2: r.day2,
+                                  abnormal: mode === "7",
+                                  manualRate: r.r7,
+                                }),
+                                data.policy,
+                              );
+                              return (
+                                <>
+                                  <b>{fmt(f.need)}</b>
+                                  <small>{f.basis}</small>
+                                </>
+                              );
+                            })()}
+                          </td>
+                          <td>
+                            {writable && (
+                              <button
+                                disabled={busy}
+                                onClick={() => transfer([r])}
+                              >
+                                Đưa SKU này sang dự báo
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <Empty>Không có SKU phù hợp bộ lọc.</Empty>
+              )}
+              <Notice>
+                {report.coverageWarning} Tín hiệu bán không tự thay đổi vòng đời
+                sản phẩm.
+              </Notice>
+            </section>
+          )}
+          {view === "reconcile" && (
+            <section className="panel">
+              <div className="panel-title">
+                <h2>Combo và dòng cần đối soát</h2>
+              </div>
+              <div className="toolbar">
+                <select
+                  aria-label="Loại dữ liệu đối soát"
+                  value={reconcileKind}
+                  onChange={(e) => setReconcileKind(e.target.value)}
+                >
+                  <option value="combo">Combo chưa tách màu/size</option>
+                  <option value="unknown">Chưa xác định mã/màu/size</option>
+                  <option value="excluded">
+                    Đơn hủy / hoàn / chưa thanh toán
+                  </option>
+                </select>
+                <span>
+                  {fmt(
+                    sourceRows
+                      .filter((r: any) => r.kind === reconcileKind)
+                      .reduce((n: number, r: any) => n + r.qty, 0),
+                  )}{" "}
+                  {reconcileKind === "combo" ? "lượt combo" : "sản phẩm"} ·
+                  Không cộng vào sản lượng bán lẻ
+                </span>
+              </div>
               <div className="table-scroll">
                 <table>
                   <thead>
                     <tr>
-                      {[
-                        "Mã",
-                        "Màu",
-                        "Size",
-                        "SL kỳ xem",
-                        "Bán 2 ngày",
-                        "TB 2 ngày",
-                        "TB 7 ngày",
-                        "Tín hiệu bán",
-                        "Lưu ý",
-                        "Tồn thực tế",
-                        "Đang về",
-                        "Vòng đời",
-                        "SL test",
-                        "Đề xuất / Công thức",
-                        "Thao tác",
-                      ].map((s) => (
-                        <th key={s}>{s}</th>
-                      ))}
+                      <th>Ngày</th>
+                      <th>Mã</th>
+                      <th>Phân loại</th>
+                      <th>SL</th>
+                      <th>Lý do</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((r: any) => (
-                      <tr key={JSON.stringify([r.sku, r.color, r.size])}>
-                        <td className="product-code">{r.sku}</td>
-                        <td className="color-cell">{r.color}</td>
-                        <td>{r.size}</td>
-                        <td>{fmt(r.qty)}</td>
-                        <td>{fmt(r.q2)}</td>
-                        <td>{fmt(r.r2)}</td>
-                        <td>{fmt(r.r7)}</td>
-                        <td>
-                          <span className="badge orange">{r.signal}</span>
-                        </td>
-                        <td>{r.viral ? "Kiểm tra Mega Live / viral" : "—"}</td>
-                        <td>
-                          <NumberInput
-                            label={`Tồn bán hàng ${r.sku} ${r.color} ${r.size}`}
-                            value={planRow(r)?.stock ?? null}
-                            disabled={!writable || busy}
-                            nullable
-                            integer
-                            save={(stock) =>
-                              updatePlan(r, {
-                                stock,
-                                inventorySource: "Nhập thủ công",
-                                inventoryAt: new Date().toISOString(),
-                              })
-                            }
-                          />
-                          {planRow(r)?.stock == null && (
-                            <small>CHƯA NHẬP TỒN</small>
-                          )}
-                        </td>
-                        <td>
-                          <NumberInput
-                            label={`Đang về bán hàng ${r.sku} ${r.color} ${r.size}`}
-                            value={planRow(r)?.inbound ?? 0}
-                            disabled={!writable || busy}
-                            integer
-                            save={(inbound) =>
-                              updatePlan(r, { inbound: inbound ?? 0 })
-                            }
-                          />
-                        </td>
-                        <td>
-                          <select
-                            aria-label={`Vòng đời bán hàng ${r.sku} ${r.color} ${r.size}`}
-                            disabled={!writable || busy}
-                            value={planRow(r)?.health || "Mở bán"}
-                            onChange={(e) =>
-                              void updatePlan(r, {
-                                health: e.target.value as Variant["health"],
-                              })
-                            }
-                          >
-                            {stages.map((s) => (
-                              <option key={s}>{s}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          {!planRow(r) || planRow(r)?.health === "Mở bán" ? (
-                            <NumberInput
-                              label={`Test bán hàng ${r.sku} ${r.color} ${r.size}`}
-                              value={planRow(r)?.pilotQty ?? 0}
-                              disabled={!writable || busy}
-                              integer
-                              maximum={100000}
-                              save={(pilotQty) =>
-                                updatePlan(r, { pilotQty: pilotQty ?? 0 })
-                              }
-                            />
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                        <td>
-                          {(() => {
-                            const f = forecast(
-                              skuSchema.parse({
-                                ...fields(r),
-                                sku: r.sku,
-                                color: r.color,
-                                size: r.size,
-                                day1: r.day1,
-                                day2: r.day2,
-                                abnormal: mode === "7",
-                                manualRate: r.r7,
-                              }),
-                              data.policy,
-                            );
-                            return (
-                              <>
-                                <b>{fmt(f.need)}</b>
-                                <small>{f.basis}</small>
-                              </>
-                            );
-                          })()}
-                        </td>
-                        <td>
-                          {writable && (
-                            <button
-                              disabled={busy}
-                              onClick={() => transfer([r])}
-                            >
-                              Đưa SKU này sang dự báo
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {sourceRows
+                      .filter((r: any) => r.kind === reconcileKind)
+                      .slice(0, 200)
+                      .map((r: any) => (
+                        <tr key={r.id}>
+                          <td>{r.date}</td>
+                          <td>{r.sku}</td>
+                          <td className="color-cell">{r.variation}</td>
+                          <td>{r.qty}</td>
+                          <td>
+                            {r.kind === "combo"
+                              ? "Lượt combo, chưa quy đổi áo"
+                              : r.reason}
+                          </td>
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
-            ) : (
-              <Empty>Không có SKU phù hợp bộ lọc.</Empty>
-            )}
-            <Notice>
-              {report.coverageWarning} Tín hiệu bán không tự thay đổi vòng đời
-              sản phẩm.
-            </Notice>
-          </section>
-          <section className="panel">
-            <div className="panel-title">
-              <h2>Combo và dòng cần đối soát</h2>
-              <a
-                className="button"
-                href={
-                  "/api/export/combos?" +
-                  new URLSearchParams({
-                    ...(from ? { from } : {}),
-                    ...(to ? { to } : {}),
-                    ...(code ? { sku: code } : {}),
-                  })
-                }
-              >
-                <Download size={15} />
-                CSV combo
-              </a>
-            </div>
-            <div className="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Ngày</th>
-                    <th>Mã</th>
-                    <th>Phân loại</th>
-                    <th>SL</th>
-                    <th>Lý do</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sourceRows
-                    .filter((r: any) => r.kind !== "single")
-                    .slice(0, 200)
-                    .map((r: any) => (
-                      <tr key={r.id}>
-                        <td>{r.date}</td>
-                        <td>{r.sku}</td>
-                        <td className="color-cell">{r.variation}</td>
-                        <td>{r.qty}</td>
-                        <td>
-                          {r.kind === "combo"
-                            ? "Lượt combo, chưa quy đổi áo"
-                            : r.reason}
-                        </td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div>
-            <small>
-              Hiển thị tối đa 200 dòng đối soát. Dữ liệu đầy đủ được giữ tại
-              backend.
-            </small>
-          </section>
+              <small>
+                Hiển thị tối đa 200 dòng đối soát. Dữ liệu đầy đủ được giữ tại
+                backend.
+              </small>
+            </section>
+          )}
         </>
       )}
       {importing && (
@@ -653,6 +661,26 @@ export function Sales({
               <strong>{preview.errors.length} lỗi cần sửa trước khi ghi</strong>
             </div>
           )}
+          {!!preview.variants?.length && (
+            <details className="sales-preview-matrix">
+              <summary>
+                Xem tổng hợp {salesMatrix(preview.variants).length} mã theo màu
+                × size trước khi nhập
+              </summary>
+              <SalesMatrix
+                products={salesMatrix(preview.variants)}
+                busy={busy}
+                writable={false}
+                readOnly
+                onVariant={() => {}}
+                onTransfer={() => {}}
+              />
+            </details>
+          )}
+          <p className="muted">
+            Xem trước tối đa 100 dòng đầu. Bảng tổng hợp màu × size bên trên
+            tính toàn bộ dòng hợp lệ trong kỳ.
+          </p>
           <div className="table-scroll">
             <table>
               <thead>
@@ -673,7 +701,16 @@ export function Sales({
                       {r.color} · {r.size}
                     </td>
                     <td>{r.qty}</td>
-                    <td>{r.kind}</td>
+                    <td title={r.reason}>
+                      {(
+                        {
+                          single: "Sản phẩm lẻ",
+                          combo: "Combo cần đối soát",
+                          excluded: "Bị loại",
+                          unknown: "Chưa rõ SKU",
+                        } as Record<string, string>
+                      )[r.kind] || r.kind}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -695,6 +732,11 @@ export function Sales({
                 "Đã nhập báo cáo bán hàng",
               ).then((ok) => {
                 if (ok) {
+                  setFrom(preview.periodStart);
+                  setTo(preview.periodEnd);
+                  setCode("");
+                  setSearch("");
+                  setView("matrix");
                   setPreview(null);
                   setRefresh((n) => n + 1);
                 }
@@ -723,7 +765,28 @@ function SalesImport({
     [mode, setMode] = useState("replace"),
     [start, setStart] = useState(""),
     [end, setEnd] = useState(""),
-    [exported, setExported] = useState(localTime(new Date().toISOString()));
+    [exported, setExported] = useState(localTime(new Date().toISOString())),
+    [inspection, setInspection] = useState<any>(null),
+    [encoded, setEncoded] = useState("");
+  const pickFile = (selected: File | null) => {
+    setFile(selected);
+    setInspection(null);
+    setEncoded("");
+    if (!selected) return;
+    void run(async () => {
+      const base64 = await fileBase64(selected);
+      const result = await send("/api/imports/sales/inspect", {
+        filename: selected.name,
+        base64,
+      });
+      setInspection(result);
+      setEncoded(base64);
+      setStart(result.periodStart);
+      setEnd(result.periodEnd);
+      if (result.exportedAt) setExported(localTime(result.exportedAt));
+      if (!result.stableKeys) setMode("replace");
+    }, "Đã nhận diện file và kỳ báo cáo; chưa ghi dữ liệu bán hàng");
+  };
   return (
     <Modal title="Nhập file TikTok Shop" onClose={onClose}>
       <form
@@ -735,7 +798,7 @@ function SalesImport({
               onPreview(
                 await send("/api/imports/sales/preview", {
                   filename: file.name,
-                  base64: await fileBase64(file),
+                  base64: encoded,
                   periodStart: start,
                   periodEnd: end,
                   mode,
@@ -751,9 +814,27 @@ function SalesImport({
             type="file"
             accept=".csv,.xlsx"
             required
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
+            disabled={busy}
+            onChange={(e) => pickFile(e.target.files?.[0] || null)}
           />
         </Field>
+        {inspection && (
+          <div className="sales-file-detected" role="status">
+            <b>
+              Đã nhận diện {fmt(inspection.dataRows)} dòng đơn hàng ·{" "}
+              {inspection.columns} cột
+            </b>
+            <span>
+              Worksheet: {inspection.source.sheet} · Kỳ dữ liệu:{" "}
+              {inspection.periodStart} → {inspection.periodEnd}
+            </span>
+            <small>
+              {inspection.exportedAt
+                ? "Thời điểm xuất lấy từ tên file; hãy kiểm tra trước khi nhập."
+                : "Chưa nhận diện được thời điểm xuất từ tên file; hãy nhập đúng thời điểm xuất báo cáo."}
+            </small>
+          </div>
+        )}
         <div className="form-grid">
           <Field label="Kỳ báo cáo từ">
             <input
@@ -784,7 +865,10 @@ function SalesImport({
         <Field label="Cách nhập">
           <select value={mode} onChange={(e) => setMode(e.target.value)}>
             <option value="replace">Thay thế kỳ báo cáo đã chọn</option>
-            <option value="append">
+            <option
+              value="append"
+              disabled={inspection && !inspection.stableKeys}
+            >
               Nhập bổ sung — cần Order Line ID hoặc SKU ID
             </option>
           </select>
@@ -794,7 +878,7 @@ function SalesImport({
           Variation, Quantity, Created Time. Combo không tự gán về một SKU.
           Không tải dữ liệu tới dịch vụ bên ngoài.
         </Notice>
-        <button className="primary" disabled={busy || !file}>
+        <button className="primary" disabled={busy || !file || !inspection}>
           Phân tích và xem trước
         </button>
       </form>

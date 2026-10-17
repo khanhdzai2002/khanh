@@ -20,6 +20,8 @@ with sync_playwright() as p:
     page.get_by_role('button',name='Nhập đơn hàng Excel / CSV',exact=True).click()
     d=page.get_by_role('dialog')
     d.get_by_label('File đơn hàng CSV hoặc XLSX (tối đa 10 MB)',exact=True).set_input_files({'name':'synthetic-ui-sales.csv','mimeType':'text/csv','buffer':csv.encode()})
+    expect(d.get_by_text('Đã nhận diện 5 dòng đơn hàng · 7 cột',exact=True)).to_be_visible()
+    expect(d.get_by_role('button',name='Phân tích và xem trước',exact=True)).to_be_enabled()
     d.get_by_label('Kỳ báo cáo từ',exact=True).fill('2026-10-14')
     d.get_by_label('Kỳ báo cáo đến',exact=True).fill('2026-10-15')
     d.get_by_label('Thời điểm xuất báo cáo (Việt Nam)',exact=True).fill('2026-10-16T10:00')
@@ -35,6 +37,15 @@ with sync_playwright() as p:
         d.get_by_role('button',name='Xác nhận ghi báo cáo',exact=True).click()
     assert confirmed.value.status==200
     d.wait_for(state='hidden')
+    matrix=page.get_by_role('table',name='Số lượng theo màu và size MIU66',exact=True)
+    expect(matrix).to_be_visible()
+    expect(matrix.locator('tfoot')).to_contain_text('40')
+    page.screenshot(path='/tmp/comsflow-sales-matrix.png',full_page=True)
+    page.get_by_role('button',name='Thu gọn',exact=True).click()
+    expect(matrix).to_have_count(0)
+    page.get_by_role('button',name='Mở tất cả mã',exact=True).click()
+    expect(page.get_by_role('table',name='Số lượng theo màu và size MIU37',exact=True)).to_be_visible()
+    page.get_by_role('button',name='Xem MIU66 Trắng (phối tay đen) M: 40 sản phẩm',exact=True).click()
     expect(page.get_by_label('Tồn bán hàng MIU66 Trắng (phối tay đen) M',exact=True)).to_be_visible()
     # Enter inventory directly in sales like V9, preserving lifecycle as an operator choice.
     for label,val in [('Tồn bán hàng MIU66 Trắng (phối tay đen) M','30'),('Đang về bán hàng MIU66 Trắng (phối tay đen) M','10')]:

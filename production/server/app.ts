@@ -34,6 +34,7 @@ import { initialAdminStatus, bootstrapInitialAdmin } from "./initial-admin";
 import { composeOrder } from "./order-composer";
 import {
   previewSales,
+  inspectSales,
   confirmSales,
   salesReport,
   syncSales,
@@ -42,6 +43,8 @@ import {
   readFileRows,
 } from "./imports";
 import { listUsers, createUser, updateUser, userAccessHistory } from "./users";
+import { salesMatrix } from "../shared/sales-matrix";
+import { salesFileSchema } from "../shared/sales-file";
 const PgStore = connectPg(session);
 export function makeApp() {
   const app = express(),
@@ -352,6 +355,17 @@ export function makeApp() {
       .parse(req.query);
     res.json(await salesReport(pool, from, to));
   });
+  app.post(
+    "/api/imports/sales/inspect",
+    permission("plan"),
+    async (req, res) => {
+      const input = salesFileSchema.parse(req.body);
+      const bytes = Buffer.from(input.base64, "base64");
+      if (bytes.length > 10e6)
+        throw new AppError(413, "Tối đa 10 MB mỗi file.");
+      res.json(await inspectSales(input.filename, bytes));
+    },
+  );
   app.post("/api/imports/sales/preview", permission("plan"), async (req, res) =>
     res.json(await transaction((db) => previewSales(db, req.actor!, req.body))),
   );
@@ -505,7 +519,14 @@ export function makeApp() {
   });
   app.get("/api/export/:kind", async (req, res) => {
     const kind = z
-        .enum(["skus", "orders", "archived", "sales", "combos"])
+        .enum([
+          "skus",
+          "orders",
+          "archived",
+          "sales",
+          "combos",
+          "reconciliation",
+        ])
         .parse(req.params.kind),
       format = z.enum(["csv", "xlsx"]).default("csv").parse(req.query.format);
     let rows: (string | number | null)[][] = [];
@@ -664,6 +685,8 @@ export function makeApp() {
           sku: z.string().max(90).optional(),
           search: z.string().max(500).default(""),
           mode: z.enum(["2", "7"]).default("2"),
+          layout: z.enum(["details", "matrix"]).default("details"),
+          bucket: z.enum(["combo", "unknown", "excluded"]).default("combo"),
         })
         .parse(req.query);
       if (filters.from && filters.to && filters.from > filters.to)
@@ -679,7 +702,30 @@ export function makeApp() {
             .join(" ")
             .toLowerCase()
             .includes(filters.search.toLowerCase()));
-      if (kind === "combos") {
+      if (kind === "reconciliation") {
+        rows = [
+          [
+            "Ngày",
+            "Mã SP",
+            "Màu / phân loại",
+            "Size",
+            "Số lượng",
+            "Nhóm đối soát",
+            "Lý do",
+          ],
+          ...report.rows
+            .filter((r) => r.kind === filters.bucket && matches(r))
+            .map((r) => [
+              r.date,
+              r.sku,
+              r.variation,
+              r.size,
+              r.qty,
+              r.kind,
+              r.reason,
+            ]),
+        ];
+      } else if (kind === "combos") {
         rows = [
           ["Ngày", "Mã SP", "Phân loại combo", "Lượt combo", "Ghi chú"],
           ...report.rows
@@ -695,6 +741,42 @@ export function makeApp() {
               "Chưa phân bổ màu/size; cần đối soát",
             ]),
         ];
+      } else if (filters.layout === "matrix") {
+        const products = salesMatrix(
+          report.variants.filter((r) => r.qty > 0 && matches(r)),
+        );
+        rows = [
+          [
+            "Mã SP",
+            "Màu",
+            ...sizes,
+            "Tổng màu",
+            "Tỷ trọng trong mã (%)",
+            "TB/ngày 2 ngày",
+            "TB/ngày 7 ngày",
+          ],
+        ];
+        for (const p of products) {
+          for (const c of p.colors)
+            rows.push([
+              p.sku,
+              c.color,
+              ...sizes.map((s) => c.sizeTotals[s]),
+              c.qty,
+              (c.qty / p.qty) * 100,
+              c.variants.reduce((n, r) => n + (r.r2 || 0), 0),
+              c.variants.reduce((n, r) => n + (r.r7 || 0), 0),
+            ]);
+          rows.push([
+            p.sku,
+            "TỔNG MÃ",
+            ...sizes.map((s) => p.sizeTotals[s]),
+            p.qty,
+            100,
+            p.r2,
+            p.r7,
+          ]);
+        }
       } else {
         const skus = await variants();
         const policy = policySchema.parse(

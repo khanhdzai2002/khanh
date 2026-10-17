@@ -1,5 +1,5 @@
 import { randomUUID, createHash } from "node:crypto";
-import ExcelJS from "exceljs";
+import { readWorkbookRows } from "./xlsx-reader";
 import { parse } from "csv-parse/sync";
 import { z } from "zod";
 import {
@@ -23,6 +23,11 @@ import {
   variants,
   type Actor,
 } from "./service";
+import {
+  checkSalesColumns,
+  describeSalesFile,
+  isDataRow,
+} from "../shared/sales-file";
 const digest = (s: string | Buffer) =>
   createHash("sha256").update(s).digest("hex");
 const uploadSchema = z
@@ -51,24 +56,18 @@ export async function readFileRows(
     });
   if (!filename.toLowerCase().endsWith(".xlsx"))
     throw new AppError(400, "Chỉ nhận CSV hoặc XLSX");
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(bytes as any);
-  const sheet = wb.worksheets[0];
-  if (!sheet) throw new AppError(400, "Không có worksheet");
-  const keys: string[] = [];
-  sheet.getRow(1).eachCell((c, i) => (keys[i] = c.text.trim()));
-  const rows: Record<string, string>[] = [];
-  sheet.eachRow((row, n) => {
-    if (n === 1) return;
-    const r: Record<string, string> = {};
-    keys.forEach((key, i) => {
-      const cell = row.getCell(i);
-      r[key] =
-        cell.value instanceof Date ? cell.value.toISOString() : cell.text;
-    });
-    rows.push(r);
-  });
-  return rows;
+  return (await readWorkbookRows(bytes)).rows;
+}
+
+export async function inspectSales(filename: string, bytes: Buffer) {
+  const workbook = filename.toLowerCase().endsWith(".xlsx")
+    ? await readWorkbookRows(bytes)
+    : null;
+  const rows = workbook?.rows || (await readFileRows(filename, bytes));
+  return {
+    ...describeSalesFile(filename, rows),
+    source: workbook?.source || { sheet: "CSV", headerRow: 1, repeatedRows: 0 },
+  };
 }
 export async function previewSales(db: DB, actor: Actor, raw: unknown) {
   const input = uploadSchema.parse(raw);
@@ -76,19 +75,18 @@ export async function previewSales(db: DB, actor: Actor, raw: unknown) {
     throw new AppError(400, "Kỳ báo cáo không hợp lệ");
   const bytes = Buffer.from(input.base64, "base64"),
     rows = await readFileRows(input.filename, bytes);
+  const fileHash = digest(bytes);
+  checkSalesColumns(rows);
   if (rows.length > 100000) throw new AppError(413, "Tối đa 100.000 dòng");
   const errors: string[] = [],
     warnings: string[] = [],
     parsed: SalesRow[] = [],
     keys = new Set<string>();
-  let duplicates = 0;
+  let duplicates = 0,
+    outOfPeriod = 0;
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    if (
-      !row["Order ID"] ||
-      String(row["Order ID"]).startsWith("Platform unique")
-    )
-      continue;
+    if (!isDataRow(row)) continue;
     try {
       if (!row["Order Status"] || !row["Created Time"] || !row.Quantity)
         throw Error("Thiếu cột TikTok bắt buộc");
@@ -98,12 +96,14 @@ export async function previewSales(db: DB, actor: Actor, raw: unknown) {
           "Nhập bổ sung cần Order Line ID hoặc SKU ID ổn định để chống trùng",
         );
       const key = digest(
-          line ? row["Order ID"] + "|" + line : digest(bytes) + "|" + i,
+          line ? row["Order ID"] + "|" + line : fileHash + "|" + i,
         ),
         r = parseSalesRow(row, key);
       z.iso.date().parse(r.date);
-      if (r.date < input.periodStart || r.date > input.periodEnd)
-        throw Error("Dòng nằm ngoài kỳ báo cáo");
+      if (r.date < input.periodStart || r.date > input.periodEnd) {
+        outOfPeriod++;
+        continue;
+      }
       if (keys.has(key)) {
         duplicates++;
         throw Error("Trùng định danh đơn/dòng trong file");
@@ -116,7 +116,14 @@ export async function previewSales(db: DB, actor: Actor, raw: unknown) {
       );
     }
   }
-  if (!parsed.length) errors.push("Không có dòng dữ liệu để nhập");
+  if (!parsed.length)
+    errors.push(
+      "Không có dòng dữ liệu trong kỳ đã chọn. Kiểm tra kỳ báo cáo được nhận diện từ file.",
+    );
+  if (outOfPeriod)
+    warnings.push(
+      `Có ${outOfPeriod} dòng ngoài kỳ đã chọn không được nhập; dữ liệu ngoài kỳ trong hệ thống được giữ nguyên.`,
+    );
   if (!rows.some((r) => r["Order Line ID"] || r["SKU ID"]))
     warnings.push(
       "File không có khóa dòng ổn định; chỉ hỗ trợ thay thế kỳ, không bổ sung.",
@@ -124,15 +131,34 @@ export async function previewSales(db: DB, actor: Actor, raw: unknown) {
   warnings.push(
     "Quy tắc lọc hủy/hoàn giữ nguyên V9; kiểm tra danh sách bị loại trước khi xác nhận. Ngày xuất chưa trọn vẹn bị loại khỏi tốc độ chuẩn.",
   );
+  const aggregated = new Map<
+    string,
+    { sku: string; name: string; color: string; size: string; qty: number }
+  >();
+  for (const row of parsed)
+    if (row.kind === "single" && row.qty > 0) {
+      const key = JSON.stringify([row.sku, row.color, row.size]);
+      const old = aggregated.get(key);
+      if (old) old.qty += row.qty;
+      else
+        aggregated.set(key, {
+          sku: row.sku,
+          name: row.name,
+          color: row.color,
+          size: row.size,
+          qty: row.qty,
+        });
+    }
   const id = randomUUID(),
     { base64, ...metadata } = input;
   const body = {
     ...metadata,
-    fileHash: digest(bytes),
+    fileHash,
     rows: parsed,
     errors,
     warnings,
     duplicates,
+    outOfPeriod,
   };
   await db.query(
     "INSERT INTO import_previews(id,actor_id,kind,body) VALUES($1,$2,$3,$4)",
@@ -145,11 +171,13 @@ export async function previewSales(db: DB, actor: Actor, raw: unknown) {
     errors,
     warnings,
     duplicates,
+    outOfPeriod,
     summary: parsed.reduce(
       (a, r) => ({ ...a, [r.kind]: (a[r.kind] || 0) + r.qty }),
       {} as Record<string, number>,
     ),
     rows: parsed.slice(0, 100),
+    variants: [...aggregated.values()],
   };
 }
 export async function confirmSales(db: DB, actor: Actor, id: string) {
@@ -186,17 +214,19 @@ export async function confirmSales(db: DB, actor: Actor, id: string) {
     ],
   );
   let skipped = 0;
+  const previousRows = await db.query(
+    "SELECT line_key,qty,kind,to_char(date,'YYYY-MM-DD') AS date,sku,color,size FROM daily_sales WHERE line_key=ANY($1::text[]) AND active",
+    [(body.rows as SalesRow[]).map((r) => r.lineKey)],
+  );
+  const previousByKey = new Map(previousRows.rows.map((r) => [r.line_key, r]));
+  const pending = [];
   for (const r of body.rows as SalesRow[]) {
-    const previous = (
-      await db.query("SELECT * FROM daily_sales WHERE line_key=$1 AND active", [
-        r.lineKey,
-      ])
-    ).rows[0];
+    const previous = previousByKey.get(r.lineKey);
     if (previous) {
       if (
         previous.qty !== r.qty ||
         previous.kind !== r.kind ||
-        previous.date.toISOString().slice(0, 10) !== r.date ||
+        previous.date !== r.date ||
         previous.sku !== r.sku ||
         previous.color !== r.color ||
         previous.size !== r.size
@@ -208,22 +238,14 @@ export async function confirmSales(db: DB, actor: Actor, id: string) {
       skipped++;
       continue;
     }
+    pending.push({ ...r, id: randomUUID() });
+  }
+  for (let i = 0; i < pending.length; i += 500) {
     await db.query(
-      "INSERT INTO daily_sales(id,import_id,line_key,date,sku,color,size,qty,kind,variation,reason,product_name) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
-      [
-        randomUUID(),
-        importId,
-        r.lineKey,
-        r.date,
-        r.sku,
-        r.color,
-        r.size,
-        r.qty,
-        r.kind,
-        r.variation,
-        r.reason,
-        r.name,
-      ],
+      `INSERT INTO daily_sales(id,import_id,line_key,date,sku,color,size,qty,kind,variation,reason,product_name)
+      SELECT x.id,$1,x."lineKey",x.date,x.sku,x.color,x.size,x.qty,x.kind,x.variation,x.reason,x.name
+      FROM jsonb_to_recordset($2::jsonb) AS x(id uuid,"lineKey" text,date date,sku text,color text,size text,qty integer,kind text,variation text,reason text,name text)`,
+      [importId, JSON.stringify(pending.slice(i, i + 500))],
     );
   }
   await db.query("UPDATE import_previews SET status='done' WHERE id=$1", [id]);
@@ -239,11 +261,11 @@ export async function confirmSales(db: DB, actor: Actor, id: string) {
 }
 export async function salesReport(db: DB, from?: string, to?: string) {
   const result = await db.query(
-    "SELECT d.*,s.exported_at,s.period_start,s.period_end,s.filename FROM daily_sales d JOIN sales_imports s ON s.id=d.import_id WHERE d.active ORDER BY date",
+    "SELECT d.*,to_char(d.date,'YYYY-MM-DD') AS sale_day,s.exported_at,s.period_start,s.period_end,s.filename FROM daily_sales d JOIN sales_imports s ON s.id=d.import_id WHERE d.active ORDER BY date",
   );
   const all = result.rows.map((r) => ({
     ...r,
-    date: new Date(r.date).toISOString().slice(0, 10),
+    date: r.sale_day,
   }));
   const single = all.filter((r) => r.kind === "single" && r.qty > 0);
   const lastDate = all.at(-1)?.date || null;

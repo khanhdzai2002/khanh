@@ -5,7 +5,7 @@
 - Node.js 24.19.0, npm 11.9.0, PostgreSQL 17 trong Docker; migrations 001–005.
 - `npm run build`: TypeScript và Vite build thành công. Tailwind biên dịch cục bộ; không cần CDN giao diện V9.
 - `npm ci` theo lockfile chạy lại thành công. Sau cài lại, đã khởi động lại Vite để làm mới dependency optimization (server đang chạy trước đó trả 504 cho cache cũ), rồi xác minh login/logout DEV và API trả 401 sau logout.
-- `npm test`: **119 tests passed, 9 files**, không có test skip. 23 tests domain, 45 tests integration PostgreSQL/HTTP và 18 tests Lark mock/security, 10 tests cấu hình origin/callback, 3 tests lọc log 2 tests SDK/web OAuth với transport giả lập 7 tests bootstrap Administrator và 11 tests quản lý thành viên.
+- `npm test`: **132 tests passed, 10 files**, không có test skip. 23 tests domain, 51 tests integration PostgreSQL/HTTP và 18 tests Lark mock/security, 10 tests cấu hình origin/callback, 3 tests lọc log 2 tests SDK/web OAuth với transport giả lập 7 tests bootstrap Administrator và 11 tests quản lý thành viên và 7 tests đọc file/ma trận bán hàng.
 - Công thức: một test đối chiếu 400 đầu vào với chính hàm calc V9 trích nguyên văn, kiểm tra need/sale/raw/target/cover/flag. Có test riêng ví dụ 60, làm tròn, ngày chờ opt-in, thiếu tồn, bất thường và bốn vòng đời.
 - Giao dịch: nhiều màu/size, nhận 300+450+250 từ 1.000; chặn vượt nhận; idempotency đồng thời; sửa sau nhận, không giảm dưới đã nhận, không đổi SKU/xóa dòng nhận; revision trước/sau; hai người sửa cùng version; xóa/khôi phục; hủy và reopen; giữ mã đã dùng; trigger bất biến.
 - Import: CSV và XLSX thật, preview chưa ghi báo cáo, confirm lặp, replace giữ nguồn cũ, append bỏ trùng và khóa khi thiếu line ID, bỏ ngày xuất chưa đủ, chuyển bán giữ tồn/inbound/vòng đời/test. JSON V9: phát hiện trùng/số nhận lệch, giữ tồn unknown, không seed sales cũ; nhập lệnh đã xóa có 2 biên nhận và nguồn editLog, nhập bản nháp giữ trạng thái.
@@ -114,3 +114,19 @@ Browser sales đã xác minh import CSV thực bằng file input, preview chưa 
 Đã chạy lại browser quản trị tài khoản sau sửa nhãn Field: thêm thành viên, đổi vai trò, khóa/mở, nhật ký, chặn hạ admin cuối, ma trận quyền, 390px và Viewer bị chặn danh sách API. Tất cả danh tính/dữ liệu đều tổng hợp trong _test.
 
 Trong quá trình phát triển có các lần smoke dừng do locator revision không duy nhất hoặc đọc session trước khi đăng nhập xong; đã sửa chờ/locator và chạy lại. Việc truy cập trường Nhà xưởng sau khi có datalist cũng phát hiện label chứa options; đã sửa liên kết label-control trong component Field và kiểm tra lại. Không coi các lần dừng đó là toàn bộ bài smoke đã đạt.
+
+
+## XLSX mẫu và ma trận báo cáo — 17/10/2026
+
+132 tests đạt trong 10 file. Bảy tests `sales-file.test.ts` kiểm tra row XML lặp số dòng, ghép theo tọa độ, không mất header, chặn hai giá trị cho cùng ô, rich text/shared strings/ngày số, tìm header/worksheet, CSV/thiếu cột, ZIP/XML/DTD và tổng ma trận. Tests integration bổ sung inspect không ghi/quyền/CSRF, preview/confirm với fixture Excel phân mảnh, ngày xuất chưa trọn, kỳ con, 1.200 dòng tổng hợp/phát lại, xuất XLSX ma trận đọc ngược theo size/tổng và xuất riêng nhóm bị loại. Kiểm tra thêm ngày bán và append không lệch khi process TZ=Asia/Ho_Chi_Minh.
+
+Đã kiểm tra file thật người dùng gửi **chỉ đọc trong bộ nhớ**, không import vào database hoặc đưa nội dung file/đơn vào Git. Dùng `npm run sales:check -- <file>`; đầu ra là metadata/tổng hợp, không in mã đơn/người mua/liên hệ. Xem [SALES_REPORT.md](SALES_REPORT.md).
+
+Smoke Chromium trên dữ liệu tổng hợp: `browser-sales.py` đã cập nhật cho UI ma trận/tab mới và nhận diện file trước preview. `browser-sales-xlsx.py` tạo fixture XLSX phân mảnh trong /tmp: kiểm tra tự điền kỳ/thời điểm xuất, preview ma trận đủ tổng trước ghi, xác nhận, M/L/tổng đúng, bỏ ngày chưa trọn trong tốc độ, CSV ma trận có XS…2XL, tab biểu đồ và xuất chỉ nhóm loại trừ, responsive 390px sau khi điều hướng hoàn tất animation. Không có pageerror. Chạy sau serve-smoke/Vite như hướng dẫn trước:
+
+```bash
+python tests/browser-sales.py
+python tests/browser-sales-xlsx.py
+```
+
+Luồng core lệnh/giao nhận đã chạy lại bằng `browser-workflow.py` và đạt. Không chạy npm test đồng thời với smoke vì cùng database _test. `npm ci --dry-run --ignore-scripts --cache /workspace/.npm-cache` xác nhận lockfile nhất quán; đây là dry-run, không mô tả là đã cài lại dependencies trong đợt này. TypeScript/Vite build được chạy lại với các dependency pin mới. Không khẳng định deployment Railway mới đã hoạt động trước khi kiểm tra trực tiếp trên hosting.

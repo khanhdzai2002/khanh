@@ -1,3 +1,4 @@
+import { salesDay } from "./sales-file";
 export type SalesRow = {
   lineKey: string;
   date: string;
@@ -69,9 +70,7 @@ export function parseSalesRow(
   lineKey: string,
 ): SalesRow {
   const source = String(r["Created Time"] || "");
-  let date = source.slice(0, 10);
-  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(source);
-  if (m) date = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  const date = salesDay(source);
   const qty = Number(r.Quantity),
     returned = Number(r["Sku Quantity of return"] || 0);
   if (

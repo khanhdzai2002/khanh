@@ -69,3 +69,5 @@ Dashboard từ dữ liệu tập trung; CRUD SKU/nhiều màu-size/sửa bảng/
 
 
 Đợt rà soát thao tác V9 ngày 17/10/2026: xem [V9_ACTION_FIXES.md](docs/V9_ACTION_FIXES.md) để biết nguyên nhân nút lưu lệnh bị khóa, cách thêm mã/màu/size ngay trong lệnh và kết quả kiểm thử luồng thao tác.
+
+Báo cáo bán hàng theo mã → màu × size và nhập XLSX theo mẫu TikTok: xem [SALES_REPORT.md](docs/SALES_REPORT.md). Có tự nhận diện kỳ file, preview ma trận, biểu đồ, chi tiết dự báo và đối soát riêng.

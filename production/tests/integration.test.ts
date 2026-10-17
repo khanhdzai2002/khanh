@@ -1299,3 +1299,220 @@ it("CSV bán hàng theo mã/kỳ giữ công thức, combo có phân loại, ch�
     await new Promise<void>((ok) => server.close(() => ok()));
   }
 });
+
+it("Excel mẫu dạng row phân mảnh: inspect không ghi, preview/confirm tạo đúng ma trận và giữ ngày chưa trọn", async () => {
+  const { fragmentedWorkbook } = await import("./fixtures/tiktok-fragments");
+  const { inspectSales } = await import("../server/imports");
+  const bytes = await fragmentedWorkbook();
+  const inspection = await inspectSales(
+    "Tất cả đơn hàng-2026-10-15-10_41 (1).xlsx",
+    bytes,
+  );
+  expect(inspection).toMatchObject({
+    periodStart: "2026-10-14",
+    periodEnd: "2026-10-15",
+    dataRows: 4,
+    stableKeys: true,
+  });
+  expect(
+    (await pool.query("SELECT count(*)::int AS n FROM import_previews")).rows[0]
+      .n,
+  ).toBe(0);
+  const p = await tx((db) =>
+    previewSales(db, actor, {
+      filename: "synthetic-fragmented.xlsx",
+      base64: bytes.toString("base64"),
+      periodStart: inspection.periodStart,
+      periodEnd: inspection.periodEnd,
+      exportedAt: inspection.exportedAt,
+      mode: "replace",
+    }),
+  );
+  expect(p.errors).toEqual([]);
+  expect(p.summary).toEqual({ single: 30, excluded: 5, combo: 3 });
+  expect(p.variants).toHaveLength(2);
+  expect(p.variants.reduce((n, r) => n + r.qty, 0)).toBe(30);
+  await tx((db) => confirmSales(db, actor, p.id));
+  const report = await salesReport(pool);
+  expect(report.lastFullDay).toBe("2026-10-14");
+  expect(report.variants.reduce((n, r) => n + r.qty, 0)).toBe(30);
+  expect(report.variants.reduce((n, r) => n + r.q2, 0)).toBe(10);
+});
+it("chọn kỳ con từ file: xem trước chỉ nhận dòng trong kỳ, cảnh báo dòng ngoài kỳ, không báo mất dữ liệu", async () => {
+  const { fragmentedWorkbook } = await import("./fixtures/tiktok-fragments");
+  const bytes = await fragmentedWorkbook();
+  const p = await tx((db) =>
+    previewSales(db, actor, {
+      filename: "synthetic.xlsx",
+      base64: bytes.toString("base64"),
+      periodStart: "2026-10-15",
+      periodEnd: "2026-10-15",
+      exportedAt: "2026-10-15T10:41:00+07:00",
+      mode: "replace",
+    }),
+  );
+  expect(p.errors).toEqual([]);
+  expect(p.outOfPeriod).toBe(1);
+  expect(p.warnings.some((w) => w.includes("ngoài kỳ"))).toBe(true);
+  expect(p.summary.single).toBe(20);
+});
+it("import lô lớn và phát lại vẫn đủ số lượng, không nhân đôi; ma trận export khớp tổng", async () => {
+  const { fragmentedWorkbook } = await import("./fixtures/tiktok-fragments");
+  const synthetic = Array.from({ length: 1200 }, (_, i) => [
+    `SYNTHETIC-BULK-${i}`,
+    "Completed",
+    "",
+    `SKU-${i}`,
+    "MIU66",
+    "Áo MIU66",
+    i % 2 ? "Trắng phối đen, M" : "Trắng phối đen, L",
+    "2",
+    "0",
+    "14/10/2026 10:00:00",
+  ]);
+  const bytes = await fragmentedWorkbook({ rows: synthetic });
+  const p = await tx((db) =>
+    previewSales(db, actor, {
+      filename: "synthetic-bulk.xlsx",
+      base64: bytes.toString("base64"),
+      periodStart: "2026-10-14",
+      periodEnd: "2026-10-14",
+      exportedAt: "2026-10-15T10:41:00+07:00",
+      mode: "replace",
+    }),
+  );
+  expect(p.errors).toEqual([]);
+  await tx((db) => confirmSales(db, actor, p.id));
+  await tx((db) => confirmSales(db, actor, p.id));
+  expect(
+    (
+      await pool.query(
+        "SELECT count(*)::int AS n FROM daily_sales WHERE active",
+      )
+    ).rows[0].n,
+  ).toBe(1200);
+  const r = await salesReport(pool);
+  expect(r.variants.reduce((n, v) => n + v.qty, 0)).toBe(2400);
+});
+it("endpoint inspect có xác thực/quyền/CSRF và không tạo import preview", async () => {
+  const server = makeApp().listen(0, "127.0.0.1");
+  await new Promise<void>((ok) => server.once("listening", ok));
+  const base = `http://127.0.0.1:${(server.address() as any).port}`;
+  const raw = upload();
+  const { filename, base64 } = raw;
+  try {
+    const post = (body: any, headers: any = {}) =>
+      fetch(base + "/api/imports/sales/inspect", {
+        method: "POST",
+        headers: {
+          Origin: process.env.PUBLIC_URL!,
+          "Content-Type": "application/json",
+          ...headers,
+        },
+        body: JSON.stringify(body),
+      });
+    expect((await post({ filename, base64 })).status).toBe(401);
+    const login = await fetch(base + "/auth/dev", {
+      method: "POST",
+      headers: { Origin: process.env.PUBLIC_URL! },
+    });
+    const Cookie = login.headers.get("set-cookie")!.split(";")[0];
+    const me = await (
+      await fetch(base + "/api/me", { headers: { Cookie } })
+    ).json();
+    expect((await post({ filename, base64 }, { Cookie })).status).toBe(403);
+    expect(
+      (await post({ filename, base64 }, { Cookie, "X-CSRF-Token": me.csrf }))
+        .status,
+    ).toBe(200);
+    expect(
+      (await pool.query("SELECT count(*)::int AS n FROM import_previews"))
+        .rows[0].n,
+    ).toBe(0);
+    await pool.query("UPDATE users SET role='Viewer' WHERE id=$1", [
+      me.user.id,
+    ]);
+    expect(
+      (await post({ filename, base64 }, { Cookie, "X-CSRF-Token": me.csrf }))
+        .status,
+    ).toBe(403);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((ok) => server.close(() => ok()));
+  }
+});
+
+it("export ma trận có đủ size/tổng màu; đối soát xuất đúng nhóm và không lẫn bán lẻ", async () => {
+  const { fragmentedWorkbook } = await import("./fixtures/tiktok-fragments");
+  const bytes = await fragmentedWorkbook();
+  const p = await tx((db) =>
+    previewSales(db, actor, {
+      filename: "synthetic.xlsx",
+      base64: bytes.toString("base64"),
+      periodStart: "2026-10-14",
+      periodEnd: "2026-10-15",
+      exportedAt: "2026-10-15T10:41:00+07:00",
+      mode: "replace",
+    }),
+  );
+  await tx((db) => confirmSales(db, actor, p.id));
+  const server = makeApp().listen(0, "127.0.0.1");
+  await new Promise<void>((ok) => server.once("listening", ok));
+  const base = `http://127.0.0.1:${(server.address() as any).port}`;
+  try {
+    const login = await fetch(base + "/auth/dev", {
+      method: "POST",
+      headers: { Origin: process.env.PUBLIC_URL! },
+    });
+    const headers = { Cookie: login.headers.get("set-cookie")!.split(";")[0] };
+    const response = await fetch(
+      base + "/api/export/sales?layout=matrix&format=xlsx",
+      { headers },
+    );
+    expect(response.status).toBe(200);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(Buffer.from(await response.arrayBuffer()) as any);
+    expect(wb.worksheets[0].getRow(1).values).toEqual(
+      expect.arrayContaining(["XS", "S", "M", "L", "XL", "2XL", "Tổng màu"]),
+    );
+    expect(wb.worksheets[0].getRow(2).getCell(5).value).toBe(10);
+    expect(wb.worksheets[0].getRow(2).getCell(6).value).toBe(20);
+    expect(wb.worksheets[0].getRow(2).getCell(9).value).toBe(30);
+    const excluded = await (
+      await fetch(base + "/api/export/reconciliation?bucket=excluded", {
+        headers,
+      })
+    ).text();
+    expect(excluded).toContain("excluded");
+    expect(excluded).toContain("Đã hủy");
+    expect(excluded).not.toContain("COMBO 2 ÁO");
+    const combo = await (
+      await fetch(base + "/api/export/reconciliation?bucket=combo", { headers })
+    ).text();
+    expect(combo).toContain("COMBO 2 ÁO");
+    expect(combo).not.toContain("Đã hủy");
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((ok) => server.close(() => ok()));
+  }
+});
+
+it("ngày bán không lệch khi server chạy múi giờ Việt Nam; nhập bổ sung vẫn chống trùng", async () => {
+  const original = process.env.TZ;
+  process.env.TZ = "Asia/Ho_Chi_Minh";
+  try {
+    const p = await tx((db) => previewSales(db, actor, upload()));
+    await tx((db) => confirmSales(db, actor, p.id));
+    const report = await salesReport(pool);
+    expect(report.lastDate).toBe("2026-10-15");
+    expect(report.lastFullDay).toBe("2026-10-14");
+    expect(report.variants[0].q2).toBe(20);
+    const append = await tx((db) => previewSales(db, actor, upload("append")));
+    expect(await tx((db) => confirmSales(db, actor, append.id))).toMatchObject({
+      skipped: 2,
+    });
+  } finally {
+    if (original === undefined) delete process.env.TZ;
+    else process.env.TZ = original;
+  }
+});

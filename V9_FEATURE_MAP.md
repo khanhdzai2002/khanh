@@ -5,6 +5,8 @@ Triển khai hiện tại: [Railway và Custom App Lark 1.0.0 đã phát hành](
 
 Cập nhật thao tác 17/10/2026: [nguyên nhân, bản sửa và kiểm thử](production/docs/V9_ACTION_FIXES.md). Bổ sung thêm mã/màu/size ngay trong lệnh, sửa số ngay trong bảng bán, chuyển từng SKU hoặc nhóm đang lọc và lỗi lưu ngay trong dialog.
 
+Báo cáo bán hàng cập nhật: [ma trận mã → màu × size và sửa bộ đọc XLSX](production/docs/SALES_REPORT.md). Giữ quy tắc số lượng, vòng đời và công thức V9.
+
 ## Trạng thái và nguồn
 
 **Đã nhận và phân tích file V9** `comsflow_production_planner_v9_chinh_sua_lich_su_goi_hang.html` (744 dòng, SHA-256 `5e468146bd3ed292b7e4494a1276e4572d08161743a5f83f57adb36ce20b3316`). Xem `docs/V9_SOURCE_INVENTORY.md` và `docs/V9_FINDINGS.md`. Ứng dụng mới được xây riêng trong `production/`, bảo toàn ứng dụng đặt xe hiện tại.
