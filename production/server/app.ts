@@ -53,6 +53,10 @@ import {
   confirmInventory,
 } from "./lark-inventory";
 import { previewInbound, confirmInbound } from "./inbound";
+import {
+  productionReport,
+  productionReportRows,
+} from "../shared/production-report";
 import { salesFileSchema } from "../shared/sales-file";
 const PgStore = connectPg(session);
 export function makeApp() {
@@ -627,6 +631,7 @@ export function makeApp() {
           "sales",
           "combos",
           "reconciliation",
+          "production-report",
         ])
         .parse(req.params.kind),
       format = z.enum(["csv", "xlsx"]).default("csv").parse(req.query.format);
@@ -660,6 +665,13 @@ export function makeApp() {
           s.pilotQty,
         ]),
       ];
+    } else if (kind === "production-report") {
+      rows = await transaction(async (db) => {
+        await db.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ");
+        return productionReportRows(
+          productionReport(await listOrders(db), req.query),
+        );
+      });
     } else if (kind === "orders" || kind === "archived") {
       const id = req.query.id ? z.uuid().parse(req.query.id) : null;
       const search = z

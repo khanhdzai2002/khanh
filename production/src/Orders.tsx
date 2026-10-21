@@ -35,6 +35,7 @@ import {
   vnDate,
   type Run,
 } from "./ui";
+import { ProductionReport } from "./ProductionReport";
 import type { Snapshot } from "./App";
 export function Orders({
   data,
@@ -53,6 +54,7 @@ export function Orders({
   seed: Variant[];
   clearSeed: () => void;
 }) {
+  const [reportTab, setReportTab] = useState(false);
   const [search, setSearch] = useState(""),
     [filter, setFilter] = useState(""),
     [editing, setEditing] = useState<ProductionOrder | "new" | null>(null),
@@ -123,7 +125,10 @@ export function Orders({
           </button>
         )}
       </div>
-      <div className="mini-kpis">
+      <div
+        className="mini-kpis"
+        style={{ display: page === "orders" && reportTab ? "none" : undefined }}
+      >
         {[
           ["Lệnh", all.length],
           ["Đã đặt", all.reduce((n, o) => n + totals(o).placed, 0)],
@@ -146,7 +151,30 @@ export function Orders({
           </div>
         ))}
       </div>
-      <section className="panel">
+      {page === "orders" && (
+        <div className="tabs">
+          <button
+            className={!reportTab ? "active" : ""}
+            onClick={() => setReportTab(false)}
+          >
+            Danh sách lệnh
+          </button>
+          <button
+            className={reportTab ? "active" : ""}
+            onClick={() => setReportTab(true)}
+          >
+            Báo cáo tỷ trọng sản phẩm
+          </button>
+        </div>
+      )}
+      {page === "orders" && reportTab && (
+        <ProductionReport orders={data.orders} onOpen={setSelected} />
+      )}
+      <section
+        className="panel"
+        hidden={page === "orders" && reportTab}
+        style={{ display: page === "orders" && reportTab ? "none" : undefined }}
+      >
         <div className="toolbar">
           <div className="search">
             <Search size={17} />

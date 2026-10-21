@@ -1675,3 +1675,25 @@ summary {
 
 .supply-actions { padding: 16px 20px; border-bottom: 1px solid #e5e7eb; flex-wrap: wrap; }
 .supply-actions small { color: #6b7280; }
+
+.production-report { display: grid; gap: 16px; }
+.production-report-kpis { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.production-ranks { display: grid; gap: 8px; margin: 16px 0; }
+.production-ranks button { display: grid; grid-template-columns: minmax(100px,160px) 1fr minmax(100px,160px); gap: 14px; align-items: center; text-align: left; border: none; background: transparent; }
+.production-rank-track { height: 14px; border-radius: 4px; background: #f3f4f6; overflow: hidden; }
+.production-rank-track i { display: block; height: 100%; background: #ee741f; }
+.production-product-heading { width: 100%; border: none; border-radius: 8px; padding: 20px; display: flex; justify-content: space-between; gap: 18px; text-align: left; background: white; }
+.production-product-heading strong { font-size: 20px; color: #202124; }
+.production-product-heading small { display: block; margin-top: 6px; color: #6b7280; }
+.production-product-heading b { color: #d96113; }
+.production-product-totals { display: flex; gap: 20px; flex-wrap: wrap; padding: 12px 20px; border-top: 1px solid #f3f4f6; background: #fffaf6; }
+.production-product-totals span { font-size: 13px; }
+.production-product h3 { margin: 18px 0 12px; }
+.production-product .table-scroll { margin-bottom: 12px; }
+.production-product table { min-width: 780px; }
+@media(max-width:640px) {
+ .production-report-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); }
+ .production-product-heading { flex-direction: column; }
+ .production-ranks button { grid-template-columns: 80px 1fr 105px; gap: 6px; padding: 4px 0; font-size: 11px; }
+}
+.production-product > .padded { padding: 0 20px 20px; }

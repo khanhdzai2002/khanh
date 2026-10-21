@@ -73,3 +73,5 @@ Dashboard từ dữ liệu tập trung; CRUD SKU/nhiều màu-size/sửa bảng/
 Báo cáo bán hàng theo mã → màu × size và nhập XLSX theo mẫu TikTok: xem [SALES_REPORT.md](docs/SALES_REPORT.md). Có tự nhận diện kỳ file, preview ma trận, biểu đồ, chi tiết dự báo và đối soát riêng.
 
 Dự kiến sản xuất có nút **Cập nhật tồn từ Lark → Đối soát hàng đang về → Lên lệnh nhanh**, theo SKU đã chọn hoặc bộ lọc đang xem. Xem [hướng dẫn và quy tắc bảo toàn dữ liệu](docs/PLANNING_ACTIONS.md).
+
+**Gối lệnh sản xuất → Báo cáo tỷ trọng sản phẩm**: top mã, tỷ trọng theo đã đặt/còn chờ, ma trận màu–size, cơ cấu từng lệnh, tiến độ/quá hạn, bộ lọc và CSV/Excel. Xem [hướng dẫn báo cáo](docs/PRODUCTION_REPORT.md).

@@ -100,3 +100,7 @@ Bổ sung nguồn tồn Wiki/Base, ánh xạ mã–màu và size ngang, ngày m�
 ### Thao tác nhanh kế hoạch
 
 Tồn Lark theo SKU đã chọn; đang về đối soát từ phần còn chờ của lệnh, thay thế không cộng dồn; lên lệnh nhanh từng SKU/nhóm đã chọn với số đề xuất V9. Giữ preview/confirm, audit/version/idempotency và không tự gửi xưởng. Xem `production/docs/PLANNING_ACTIONS.md`.
+
+### Báo cáo cơ cấu sản phẩm gối
+
+Thêm báo cáo tỷ trọng theo mã, màu/size, từng lệnh, xưởng/ngày, tiến độ và quá hạn tại trang Gối lệnh sản xuất. Dùng số lượng thật đã đặt/nhận/còn chờ, lọc rõ trạng thái và mẫu số, xuất CSV/Excel. Chỉ đọc; giữ nguyên nghiệp vụ V9. Xem `production/docs/PRODUCTION_REPORT.md`.
