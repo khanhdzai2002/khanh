@@ -104,3 +104,7 @@ Tồn Lark theo SKU đã chọn; đang về đối soát từ phần còn chờ 
 ### Báo cáo cơ cấu sản phẩm gối
 
 Thêm báo cáo tỷ trọng theo mã, màu/size, từng lệnh, xưởng/ngày, tiến độ và quá hạn tại trang Gối lệnh sản xuất. Dùng số lượng thật đã đặt/nhận/còn chờ, lọc rõ trạng thái và mẫu số, xuất CSV/Excel. Chỉ đọc; giữ nguyên nghiệp vụ V9. Xem `production/docs/PRODUCTION_REPORT.md`.
+
+### Danh sách chờ và tỷ trọng tròn
+
+Thêm ngay dưới danh sách lệnh: cộng phần chưa nhận theo mã–màu–size, bộ lọc/search không dấu, modal đối soát lệnh nguồn, donut tỷ trọng số còn chờ theo mã và CSV/Excel đúng bộ lọc. Chỉ đọc, không thay tồn/giao nhận/dự báo V9. Xem `production/docs/PENDING_PRODUCTION.md`.

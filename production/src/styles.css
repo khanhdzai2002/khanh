@@ -1697,3 +1697,18 @@ summary {
  .production-ranks button { grid-template-columns: 80px 1fr 105px; gap: 6px; padding: 4px 0; font-size: 11px; }
 }
 .production-product > .padded { padding: 0 20px 20px; }
+
+.pending-production { display: grid; gap: 18px; margin: 24px 0; }
+.pending-production h3 { margin: 0 0 12px; }
+.pending-dashboard { display: grid; grid-template-columns: minmax(240px,1fr) minmax(300px,1fr); gap: 30px; align-items: center; }
+.pending-donut { width: min(100%,300px); margin: auto; }
+.pending-donut svg { display: block; width: 100%; }
+.pending-donut-total { font-size: 24px; font-weight: 800; fill: #202124; }
+.pending-donut-label { font-size: 11px; fill: #6b7280; }
+.pending-legend { display: grid; gap: 12px; min-width: 0; }
+.pending-legend > div { display: grid; grid-template-columns: 12px minmax(70px,1fr) auto 55px; align-items: center; gap: 10px; }
+.pending-legend button { text-align: left; overflow-wrap: anywhere; }
+.pending-legend small { color: #6b7280; }
+.pending-swatch { width: 12px; height: 12px; border-radius: 3px; }
+.pending-production table { min-width: 1080px; }
+@media(max-width:750px) { .pending-dashboard { grid-template-columns: minmax(0,1fr); gap: 16px; } .pending-legend > div { gap: 6px; font-size: 12px; } }

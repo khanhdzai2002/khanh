@@ -1,0 +1,61 @@
+"""Synthetic pending overview, only serve-smoke _test database + Vite5175."""
+import csv,io,uuid
+from pathlib import Path
+from playwright.sync_api import sync_playwright,expect
+with sync_playwright() as p:
+ b=p.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox'])
+ page=b.new_page(locale='vi-VN',viewport={'width':1440,'height':1000});page.set_default_timeout(10000)
+ errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+ page.goto('http://localhost:5175',wait_until='networkidle');page.get_by_role('button',name='Đăng nhập DEV (dữ liệu thử nghiệm)',exact=True).click()
+ expect(page.get_by_text('MÔI TRƯỜNG PHÁT TRIỂN',exact=False)).to_be_visible()
+ me=page.request.get('http://localhost:5175/api/me').json();assert me['development']
+ headers={'Origin':'http://localhost:5175','X-CSRF-Token':me['csrf']}
+ def post(path,body,extra=None):
+  r=page.request.post('http://localhost:5175'+path,data=body,headers={**headers,**(extra or {})});assert r.ok,r.text();return r.json()
+ def sku(code,color,size):return post('/api/skus',{'sku':code,'color':color,'size':size})['id']
+ s=sku('MIU66','Xám tiêu','S');m=sku('MIU66','Xám tiêu','M');l=sku('MIU66','Xám tiêu','L');other=sku('MIU79','Đen','M')
+ def order(items,supplier,status='Đã xác nhận'):
+  return post('/api/orders',{'time':'2026-10-20T10:00:00+07:00','supplier':supplier,'delivery':'2026-10-25','requestedBy':'Synthetic planner','notes':'Synthetic only','status':status,'items':[{'variantId':i,'qty':q,'priority':'THƯỜNG'} for i,q in items]})
+ a=order([(s,100),(m,80),(l,50)],'Synthetic One')
+ post('/api/orders/'+a['id']+'/receipts',{'expectedVersion':a['version'],'date':'2026-10-21','note':'Synthetic receipts','lines':[{'itemId':next(i for i in a['items'] if i['variantId']==vid)['id'],'qty':qty} for vid,qty in [(s,30),(m,20),(l,10)]]},{'Idempotency-Key':str(uuid.uuid4())})
+ second=order([(s,20),(other,100)],'Synthetic Two')
+ post('/api/orders/'+second['id']+'/receipts',{'expectedVersion':second['version'],'date':'2026-10-21','note':'Synthetic receipt','lines':[{'itemId':next(i for i in second['items'] if i['variantId']==s)['id'],'qty':5}]},{'Idempotency-Key':str(uuid.uuid4())})
+ order([(s,999)],'Synthetic Draft','Nháp')
+ page.get_by_role('button',name='Tải lại dữ liệu',exact=True).click();page.get_by_role('button',name='Gối lệnh sản xuất',exact=True).click()
+ section=page.get_by_role('region',name='Danh sách chờ sản xuất theo mã màu size',exact=True)
+ expect(section).to_be_visible()
+ expect(section.locator('.pending-donut-total')).to_have_text('285')
+ expect(section.get_by_role('img',name='Biểu đồ tròn tỷ trọng số lượng còn chờ theo mã sản phẩm',exact=True)).to_be_visible()
+ table=section.get_by_role('table',name='Số lượng chờ theo mã màu size',exact=True)
+ row=table.locator('tbody tr').filter(has_text='MIU66')
+ expect(row).to_contain_text('Xám tiêu');assert row.locator('td').all_text_contents()[3:6]==['85','60','40']
+ expect(table.locator('tfoot')).to_contain_text('285')
+ section.get_by_label('Tìm mã, màu, size hoặc mã lệnh',exact=True).fill('tieu miu66 xam')
+ expect(section.locator('.pending-donut-total')).to_have_text('185');expect(section.locator('.pending-legend')).to_contain_text('100%')
+ section.get_by_role('button',name='Xem lệnh MIU66 Xám tiêu',exact=True).click()
+ sources=section.get_by_role('table',name='Nguồn lệnh MIU66 Xám tiêu',exact=True)
+ expect(sources).to_contain_text(a['code']);expect(sources).to_contain_text(second['code'])
+ sources.get_by_role('button',name=a['code'],exact=True).click();d=page.get_by_role('dialog');expect(d).to_contain_text(a['code']);d.get_by_role('button',name='Đóng',exact=True).click()
+ with page.expect_download() as download:section.get_by_role('link',name='Xuất chờ sản xuất CSV',exact=True).click()
+ rows=list(csv.reader(io.StringIO(Path(download.value.path()).read_text(encoding='utf-8-sig'))));assert len(rows)==2 and rows[1][3:6]==['85','60','40'] and rows[1][8]=='185'
+ section.get_by_label('Size chờ sản xuất',exact=True).select_option('S');expect(section.locator('.pending-donut-total')).to_have_text('85')
+ section.get_by_label('Xưởng chờ sản xuất',exact=True).select_option('Synthetic One');expect(section.locator('.pending-donut-total')).to_have_text('70')
+ section.get_by_role('button',name='Xóa bộ lọc chờ sản xuất',exact=True).click();expect(section.locator('.pending-donut-total')).to_have_text('285')
+ section.get_by_role('button',name='Lọc chờ sản xuất mã MIU66',exact=True).click();expect(section.locator('.pending-donut-total')).to_have_text('185')
+ section.get_by_label('Màu chờ sản xuất',exact=True).select_option('Xám tiêu')
+ section.get_by_label('Mã sản phẩm chờ sản xuất',exact=True).select_option('MIU79');expect(section.get_by_label('Màu chờ sản xuất',exact=True)).to_have_value('');expect(section.locator('.pending-donut-total')).to_have_text('100')
+ section.get_by_label('Tìm mã, màu, size hoặc mã lệnh',exact=True).fill('khong-co-san-pham');expect(section.locator('.pending-donut svg')).to_have_count(0)
+ section.get_by_role('button',name='Xóa bộ lọc chờ sản xuất',exact=True).click()
+ section.get_by_label('Tính nháp trong danh sách chờ',exact=False).check();expect(section.locator('.pending-donut-total')).to_have_text('1.284');section.get_by_label('Tính nháp trong danh sách chờ',exact=False).uncheck()
+ section.get_by_label('Chờ sản xuất từ ngày lập lệnh',exact=True).fill('2026-10-24');section.get_by_label('Chờ sản xuất đến ngày lập lệnh',exact=True).fill('2026-10-20');expect(section.get_by_text('Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.',exact=True)).to_be_visible()
+ section.get_by_role('button',name='Xóa bộ lọc chờ sản xuất',exact=True).click()
+ section.get_by_role('button',name='Xem lệnh MIU66 Xám tiêu',exact=True).click()
+ page.get_by_role('dialog').screenshot(path='/tmp/comsflow-pending-source-orders.png')
+ page.get_by_role('dialog').get_by_role('button',name='Đóng',exact=True).click()
+ section.screenshot(path='/tmp/comsflow-pending-production-desktop.png')
+ page.set_viewport_size({'width':390,'height':844});expect(page.locator('aside')).to_have_css('transform','matrix(1, 0, 0, 1, -250, 0)')
+ assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+ section.screenshot(path='/tmp/comsflow-pending-production-mobile.png')
+ assert not errors,errors
+ print('PASS pending: visible below order list -> donut285 -> MIU66/Xam Tieu S85 M60 L40 -> no-accent search -> source orders -> filtered CSV -> size/factory/product/colour filters -> legend -> zero/invalid date/drafts -> desktop/mobile. Synthetic only.')
+ b.close()

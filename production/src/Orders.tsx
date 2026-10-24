@@ -35,6 +35,7 @@ import {
   vnDate,
   type Run,
 } from "./ui";
+import { PendingProduction } from "./PendingProduction";
 import { ProductionReport } from "./ProductionReport";
 import type { Snapshot } from "./App";
 export function Orders({
@@ -344,6 +345,9 @@ export function Orders({
           </Empty>
         )}
       </section>
+      {page === "orders" && !reportTab && (
+        <PendingProduction orders={data.orders} onOpen={setSelected} />
+      )}
       <Notice>
         Trạng thái “Đã gửi xưởng” là thông tin nội bộ. Ứng dụng chưa gửi email
         hoặc tin nhắn tới xưởng. Xóa mềm khác với hủy phần còn chờ.

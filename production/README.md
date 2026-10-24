@@ -75,3 +75,5 @@ Báo cáo bán hàng theo mã → màu × size và nhập XLSX theo mẫu TikTok
 Dự kiến sản xuất có nút **Cập nhật tồn từ Lark → Đối soát hàng đang về → Lên lệnh nhanh**, theo SKU đã chọn hoặc bộ lọc đang xem. Xem [hướng dẫn và quy tắc bảo toàn dữ liệu](docs/PLANNING_ACTIONS.md).
 
 **Gối lệnh sản xuất → Báo cáo tỷ trọng sản phẩm**: top mã, tỷ trọng theo đã đặt/còn chờ, ma trận màu–size, cơ cấu từng lệnh, tiến độ/quá hạn, bộ lọc và CSV/Excel. Xem [hướng dẫn báo cáo](docs/PRODUCTION_REPORT.md).
+
+**Ngay dưới danh sách lệnh**: bảng Chờ sản xuất theo mã–màu–size, search không dấu, bộ lọc, biểu đồ tròn tỷ trọng số còn chờ và cửa sổ lệnh nguồn. Xem [hướng dẫn tra cứu nhanh](docs/PENDING_PRODUCTION.md).

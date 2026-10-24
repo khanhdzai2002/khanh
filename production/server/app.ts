@@ -57,6 +57,10 @@ import {
   productionReport,
   productionReportRows,
 } from "../shared/production-report";
+import {
+  pendingProduction,
+  pendingProductionRows,
+} from "../shared/pending-production";
 import { salesFileSchema } from "../shared/sales-file";
 const PgStore = connectPg(session);
 export function makeApp() {
@@ -632,6 +636,7 @@ export function makeApp() {
           "combos",
           "reconciliation",
           "production-report",
+          "pending-production",
         ])
         .parse(req.params.kind),
       format = z.enum(["csv", "xlsx"]).default("csv").parse(req.query.format);
@@ -665,6 +670,13 @@ export function makeApp() {
           s.pilotQty,
         ]),
       ];
+    } else if (kind === "pending-production") {
+      rows = await transaction(async (db) => {
+        await db.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ");
+        return pendingProductionRows(
+          pendingProduction(await listOrders(db), req.query),
+        );
+      });
     } else if (kind === "production-report") {
       rows = await transaction(async (db) => {
         await db.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ");
