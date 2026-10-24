@@ -29,6 +29,8 @@ import {
   totals,
   forecast,
   sizes,
+  historicalSizes,
+  isActiveSize,
 } from "../shared/domain";
 import { initialAdminStatus, bootstrapInitialAdmin } from "./initial-admin";
 import { composeOrder } from "./order-composer";
@@ -722,6 +724,13 @@ export function makeApp() {
             (filter === "cancelled" && o.cancelled)) &&
           (kind === "archived" ? !!o.deletedAt : !o.deletedAt),
       );
+      const documentHistory = !!id || kind === "archived";
+      const exportSizes = historicalSizes.filter(
+        (s) =>
+          isActiveSize(s) ||
+          (documentHistory &&
+            all.some((o) => o.items.some((i) => i.size === s))),
+      );
       rows = [
         [
           "Mã lệnh",
@@ -740,22 +749,24 @@ export function makeApp() {
           "Ghi chú",
         ],
         ...all.flatMap((o) =>
-          o.items.map((i) => [
-            o.code,
-            o.time,
-            o.supplier,
-            o.delivery,
-            i.sku,
-            i.color,
-            i.size,
-            i.qty,
-            i.received,
-            o.cancelled ? 0 : i.qty - i.received,
-            i.priority,
-            o.requestedBy,
-            totals(o).status,
-            o.notes,
-          ]),
+          o.items
+            .filter((i) => documentHistory || isActiveSize(i.size))
+            .map((i) => [
+              o.code,
+              o.time,
+              o.supplier,
+              o.delivery,
+              i.sku,
+              i.color,
+              i.size,
+              i.qty,
+              i.received,
+              o.cancelled ? 0 : i.qty - i.received,
+              i.priority,
+              o.requestedBy,
+              totals(o).status,
+              o.notes,
+            ]),
         ),
       ];
       if (id) {
@@ -767,7 +778,7 @@ export function makeApp() {
             "Hẹn giao",
             "Mã SP",
             "Màu",
-            ...sizes,
+            ...exportSizes,
             "Tổng",
             "Ưu tiên",
             "Người đặt",
@@ -777,7 +788,9 @@ export function makeApp() {
         ];
         for (const order of all) {
           const groups = new Map<string, typeof order.items>();
-          for (const item of order.items) {
+          for (const item of order.items.filter(
+            (i) => documentHistory || isActiveSize(i.size),
+          )) {
             const key = JSON.stringify([item.sku, item.color]);
             groups.set(key, [...(groups.get(key) || []), item]);
           }
@@ -794,7 +807,7 @@ export function makeApp() {
               order.delivery,
               items[0].sku,
               items[0].color,
-              ...sizes.map((size) =>
+              ...exportSizes.map((size) =>
                 items
                   .filter((i) => i.size === size)
                   .reduce((n, i) => n + i.qty, 0),

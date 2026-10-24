@@ -6,6 +6,7 @@ import {
   AppError,
   skuSchema,
   sizes,
+  isActiveSize,
   stages,
   policySchema,
   defaultPolicy,
@@ -267,7 +268,9 @@ export async function salesReport(db: DB, from?: string, to?: string) {
     ...r,
     date: r.sale_day,
   }));
-  const single = all.filter((r) => r.kind === "single" && r.qty > 0);
+  const single = all.filter(
+    (r) => r.kind === "single" && r.qty > 0 && isActiveSize(r.size),
+  );
   const lastDate = all.at(-1)?.date || null;
   let lastFullDay = lastDate;
   if (lastDate) {
@@ -323,7 +326,11 @@ export async function salesReport(db: DB, from?: string, to?: string) {
     lastFullDay,
     lastDate,
     variants,
-    rows: selected,
+    rows: selected.map((r) =>
+      r.kind === "single" && !isActiveSize(r.size)
+        ? { ...r, kind: "excluded", reason: "Size đã ngừng kinh doanh" }
+        : r,
+    ),
     files: [...new Set(all.map((r) => r.filename))],
     coverageWarning:
       "TB chia cố định 2/7 ngày như V9; hãy xác nhận file bao phủ đủ cửa sổ, ngày thiếu không tự nội suy.",
@@ -583,6 +590,11 @@ export async function previewV9(db: DB, actor: Actor, raw: unknown) {
   };
 }
 export function legacySku(r: any) {
+  if (!isActiveSize(String(r.size)))
+    throw new AppError(
+      400,
+      "Dữ liệu có size đã ngừng kinh doanh; giữ bản sao lưu để đối soát, không nhập vào danh mục/lệnh mới",
+    );
   return skuSchema.parse({
     sku: String(r.sku || "").toUpperCase(),
     color: r.color,

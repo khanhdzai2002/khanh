@@ -28,7 +28,7 @@ with sync_playwright() as p:
  expect(section.get_by_role('img',name='Biểu đồ tròn tỷ trọng số lượng còn chờ theo mã sản phẩm',exact=True)).to_be_visible()
  table=section.get_by_role('table',name='Số lượng chờ theo mã màu size',exact=True)
  row=table.locator('tbody tr').filter(has_text='MIU66')
- expect(row).to_contain_text('Xám tiêu');assert row.locator('td').all_text_contents()[3:6]==['85','60','40']
+ expect(row).to_contain_text('Xám tiêu');assert row.locator('td').all_text_contents()[2:5]==['85','60','40']
  expect(table.locator('tfoot')).to_contain_text('285')
  section.get_by_label('Tìm mã, màu, size hoặc mã lệnh',exact=True).fill('tieu miu66 xam')
  expect(section.locator('.pending-donut-total')).to_have_text('185');expect(section.locator('.pending-legend')).to_contain_text('100%')
@@ -37,7 +37,7 @@ with sync_playwright() as p:
  expect(sources).to_contain_text(a['code']);expect(sources).to_contain_text(second['code'])
  sources.get_by_role('button',name=a['code'],exact=True).click();d=page.get_by_role('dialog');expect(d).to_contain_text(a['code']);d.get_by_role('button',name='Đóng',exact=True).click()
  with page.expect_download() as download:section.get_by_role('link',name='Xuất chờ sản xuất CSV',exact=True).click()
- rows=list(csv.reader(io.StringIO(Path(download.value.path()).read_text(encoding='utf-8-sig'))));assert len(rows)==2 and rows[1][3:6]==['85','60','40'] and rows[1][8]=='185'
+ rows=list(csv.reader(io.StringIO(Path(download.value.path()).read_text(encoding='utf-8-sig'))));assert len(rows)==2 and rows[1][2:5]==['85','60','40'] and rows[1][6]=='185'
  section.get_by_label('Size chờ sản xuất',exact=True).select_option('S');expect(section.locator('.pending-donut-total')).to_have_text('85')
  section.get_by_label('Xưởng chờ sản xuất',exact=True).select_option('Synthetic One');expect(section.locator('.pending-donut-total')).to_have_text('70')
  section.get_by_role('button',name='Xóa bộ lọc chờ sản xuất',exact=True).click();expect(section.locator('.pending-donut-total')).to_have_text('285')

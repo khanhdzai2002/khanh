@@ -64,10 +64,15 @@ export async function inventoryFields(
     if (!result.data)
       throw new AppError(502, "Lark không trả về danh sách cột");
     fields.push(
-      ...(result.data.items || []).map((f) => ({
-        name: f.field_name,
-        type: f.type,
-      })),
+      ...(result.data.items || [])
+        .filter(
+          (f) =>
+            !/^(XS|2XL|XXL)$/i.test(f.field_name.trim().replace(/^#\s*/, "")),
+        )
+        .map((f) => ({
+          name: f.field_name,
+          type: f.type,
+        })),
     );
     if (!result.data.has_more) break;
     page = result.data.page_token;

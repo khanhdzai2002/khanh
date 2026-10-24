@@ -21,6 +21,7 @@ import { api, send, setCsrf } from "./api";
 import { fmt, Empty, Notice, ActionFeedback, type Run } from "./ui";
 import {
   can,
+  isActiveSize,
   forecast,
   totals,
   type Variant,
@@ -440,20 +441,23 @@ function Dashboard({
     [sku, setSku] = useState(""),
     [from, setFrom] = useState(""),
     [to, setTo] = useState("");
-  const orders = data.orders.filter(
-    (o) =>
-      !o.deletedAt &&
-      (!supplier || o.supplier === supplier) &&
-      (!sku || o.items.some((i) => i.sku === sku)) &&
-      (!from ||
-        new Intl.DateTimeFormat("en-CA", {
-          timeZone: "Asia/Ho_Chi_Minh",
-        }).format(new Date(o.time)) >= from) &&
-      (!to ||
-        new Intl.DateTimeFormat("en-CA", {
-          timeZone: "Asia/Ho_Chi_Minh",
-        }).format(new Date(o.time)) <= to),
-  );
+  const orders = data.orders
+    .map((o) => ({ ...o, items: o.items.filter((i) => isActiveSize(i.size)) }))
+    .filter((o) => o.items.length > 0)
+    .filter(
+      (o) =>
+        !o.deletedAt &&
+        (!supplier || o.supplier === supplier) &&
+        (!sku || o.items.some((i) => i.sku === sku)) &&
+        (!from ||
+          new Intl.DateTimeFormat("en-CA", {
+            timeZone: "Asia/Ho_Chi_Minh",
+          }).format(new Date(o.time)) >= from) &&
+        (!to ||
+          new Intl.DateTimeFormat("en-CA", {
+            timeZone: "Asia/Ho_Chi_Minh",
+          }).format(new Date(o.time)) <= to),
+    );
   const skus = data.skus.filter((s) => !sku || s.sku === sku),
     today = new Intl.DateTimeFormat("en-CA", {
       timeZone: "Asia/Ho_Chi_Minh",

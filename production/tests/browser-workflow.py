@@ -63,7 +63,7 @@ with sync_playwright() as p:
     d.get_by_role('button',name='Nhập mã / màu mới',exact=True).click()
     d.get_by_label('Mã sản phẩm mới hoặc đã có',exact=True).fill('SYNTHETIC-UI')
     d.get_by_label('Màu / phối màu — mỗi màu một dòng',exact=True).fill('Đen')
-    for size,qty in [('XS','2'),('S','0'),('M','0'),('L','0')]: d.get_by_label(size,exact=True).fill(qty)
+    for size,qty in [('XL','2'),('S','0'),('M','0'),('L','0')]: d.get_by_label(size,exact=True).fill(qty)
     d.get_by_role('button',name='Thêm các màu đã chọn',exact=True).click()
     d.get_by_label('Lý do chỉnh sửa (bắt buộc)',exact=True).fill('SYNTHETIC thêm màu sau nhận')
     with page.expect_response(lambda r:r.request.method=='PUT' and '/compose' in r.url) as edited:

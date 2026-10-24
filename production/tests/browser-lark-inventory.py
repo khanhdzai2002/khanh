@@ -27,9 +27,9 @@ with sync_playwright() as p:
     preview_button=page.get_by_role('button',name='Đọc tồn & xem trước',exact=True)
     expect(preview_button).to_be_disabled()
     page.get_by_label('Link bảng tồn kho (có table và view)',exact=True).fill('https://synthetic.larksuite.com/wiki/SyntheticNode123?table=tblSynthetic&view=vewSynthetic')
-    page.route('**/api/lark/inventory/fields',lambda route:route.fulfill(json={'fields':[{'name':n,'type':1} for n in ['Mã sản phẩm','Màu','Ngày kiểm','S','M','L','XL','XXL']]}))
+    page.route('**/api/lark/inventory/fields',lambda route:route.fulfill(json={'fields':[{'name':n,'type':1} for n in ['Mã sản phẩm','Màu','Ngày kiểm','S','M','L','XL']]}))
     page.get_by_role('button',name='Đọc danh sách cột',exact=True).click()
-    expect(page.get_by_label('Tồn size 2XL',exact=True)).to_have_value('XXL')
+    expect(page.get_by_label('Tồn size XL',exact=True)).to_have_value('XL')
     expect(page.get_by_label('Ô size để trống',exact=True)).to_have_value('zero')
     page.get_by_label('SKU chưa có trong danh mục',exact=True).select_option('create')
     with page.expect_response(lambda r:r.request.method=='POST' and r.url.endswith('/inventory/source')) as saved:
@@ -39,20 +39,20 @@ with sync_playwright() as p:
     def mock_read(route):
         output=subprocess.check_output(['node','--import','tsx','--input-type=module','-e',fixture],cwd=root,text=True)
         value=json.loads(output)
-        assert value['count']==5 and value['errors']==[],value
+        assert value['count']==4 and value['errors']==[],value
         route.fulfill(json=value)
     page.route('**/api/lark/inventory/preview',mock_read)
     preview_button.click()
     d=page.get_by_role('dialog')
     expect(d.get_by_role('heading',name='Kiểm tra tồn kho từ Lark',exact=True)).to_be_visible()
     assert page.request.get('http://localhost:5175/api/skus').json()==[], 'Preview must not create SKUs'
-    expect(d.get_by_text('Tạo SKU',exact=True)).to_have_count(5)
+    expect(d.get_by_text('Tạo SKU',exact=True)).to_have_count(4)
     with page.expect_response(lambda r:r.request.method=='POST' and '/inventory/' in r.url and r.url.endswith('/confirm')) as confirmed:
-        d.get_by_role('button',name='Xác nhận cập nhật 5 SKU',exact=True).click()
+        d.get_by_role('button',name='Xác nhận cập nhật 4 SKU',exact=True).click()
     assert confirmed.value.status==200,confirmed.value.text()
     d.wait_for(state='hidden')
     skus=page.request.get('http://localhost:5175/api/skus').json()
-    assert len(skus)==5 and sum(v['stock'] for v in skus)==23
+    assert len(skus)==4 and sum(v['stock'] for v in skus)==23
     assert all(v['health']=='Mở bán' and v['inbound']==0 for v in skus)
     page.reload(wait_until='networkidle')
     page.get_by_role('button',name='Cấu hình & dữ liệu',exact=True).click()
@@ -64,5 +64,5 @@ with sync_playwright() as p:
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     page.screenshot(path='/tmp/comsflow-lark-inventory-mobile.png',full_page=True)
     assert not errors,errors
-    print('PASS inventory UI: columns/XXL mapping/blank-zero defaults -> real save -> synthetic Lark preview -> no early writes -> real confirm creates 5 SKUs -> reload persistent config -> desktop/390px; no page errors.')
+    print('PASS inventory UI: columns/four-size mapping/blank-zero defaults -> real save -> synthetic Lark preview -> no early writes -> real confirm creates 4 SKUs -> reload persistent config -> desktop/390px; no page errors.')
     browser.close()

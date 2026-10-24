@@ -3,6 +3,8 @@ import { z } from "zod";
 import { pool, transaction, audit, type DB } from "./db";
 import {
   AppError,
+  isActiveSize,
+  sizes,
   skuSchema,
   orderSchema,
   totals,
@@ -54,7 +56,8 @@ export async function listOrders(db: DB = pool) {
 }
 export async function variants(db: DB = pool): Promise<Variant[]> {
   const r = await db.query(
-    "SELECT id,body,version FROM variants ORDER BY body->>'sku',body->>'color',size",
+    "SELECT id,body,version FROM variants WHERE size=ANY($1::text[]) ORDER BY body->>'sku',body->>'color',size",
+    [sizes],
   );
   return r.rows.map((x) => ({ ...x.body, id: x.id, version: x.version }));
 }
@@ -72,6 +75,11 @@ export async function saveSku(
       await db.query("SELECT * FROM variants WHERE id=$1 FOR UPDATE", [id])
     ).rows[0];
     if (!old) throw new AppError(404, "Không tìm thấy SKU");
+    if (!isActiveSize(old.size))
+      throw new AppError(
+        409,
+        "SKU đã ngừng kinh doanh; không sửa hoặc đổi định danh lịch sử",
+      );
     if (old.version !== version)
       throw new AppError(409, "SKU đã thay đổi. Hãy tải lại.");
     if (
@@ -218,6 +226,16 @@ export async function createOrder(db: DB, actor: Actor, raw: unknown) {
   validateItems(input);
   if (input.items.some((i) => i.id))
     throw new AppError(400, "Dòng mới không được có ID cũ");
+  const selectedVariants = (
+    await db.query("SELECT id,size FROM variants WHERE id=ANY($1::uuid[])", [
+      input.items.map((i) => i.variantId),
+    ])
+  ).rows;
+  if (
+    selectedVariants.length !== input.items.length ||
+    selectedVariants.some((v) => !isActiveSize(v.size))
+  )
+    throw new AppError(400, "Lệnh mới chỉ được dùng size S, M, L, XL");
   const id = randomUUID(),
     code = input.code || (await nextCode(db)),
     now = new Date().toISOString();
@@ -265,6 +283,36 @@ export async function editOrder(
   const next = parsed.order;
   validateItems(next);
   const original = new Map(before.items.map((i) => [i.id, i]));
+  const retired = before.items.filter((i) => !isActiveSize(i.size));
+  for (const old of retired) {
+    const nextItem = next.items.find((i) => i.id === old.id);
+    if (
+      !nextItem ||
+      nextItem.variantId !== old.variantId ||
+      nextItem.qty !== old.qty
+    )
+      throw new AppError(
+        409,
+        "Dòng size đã ngừng chỉ giữ nguyên để bảo toàn lịch sử",
+      );
+  }
+  const targetVariants = (
+    await db.query("SELECT id,size FROM variants WHERE id=ANY($1::uuid[])", [
+      next.items.map((i) => i.variantId),
+    ])
+  ).rows;
+  for (const item of next.items) {
+    const v = targetVariants.find((v) => v.id === item.variantId);
+    if (
+      !v ||
+      (!isActiveSize(v.size) &&
+        !retired.some(
+          (r) => r.id === item.id && r.variantId === item.variantId,
+        ))
+    )
+      throw new AppError(400, "Không thêm dòng size đã ngừng vào lệnh");
+  }
+
   for (const item of next.items) {
     const old = item.id ? original.get(item.id) : undefined;
     if (item.id && !old) throw new AppError(400, "Dòng không thuộc lệnh này");
@@ -307,12 +355,12 @@ export async function editOrder(
   await reserveCode(db, code, id);
   // Unreceived rows have no receipt references. Received row identities are never deleted.
   await db.query(
-    "DELETE FROM production_order_items WHERE order_id=$1 AND received=0",
-    [id],
+    "DELETE FROM production_order_items WHERE order_id=$1 AND received=0 AND variant_id IN (SELECT id FROM variants WHERE size=ANY($2::text[]))",
+    [id, sizes],
   );
   for (const i of next.items) {
     const old = i.id ? original.get(i.id) : undefined;
-    if (old && old.received > 0)
+    if (old && (old.received > 0 || !isActiveSize(old.size)))
       await db.query(
         "UPDATE production_order_items SET qty=$2,priority=$3 WHERE id=$1",
         [i.id, i.qty, i.priority],

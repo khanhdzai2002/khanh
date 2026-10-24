@@ -22,7 +22,7 @@ Sau Railway triển khai bản mã mới và migrations thành công:
 1. Mở ứng dụng bằng Administrator → **Cấu hình & dữ liệu → Tồn kho Lark Base**.
 2. Dán link đầy đủ của bảng với `table=tbl…` và `view=vew…`. Hỗ trợ link `/wiki/…` và `/base/…`. Đừng nhập Wiki token vào biến `LARK_BASE_APP_TOKEN`: hai mã này khác nhau.
 3. Bấm **Đọc danh sách cột**. Link không được tải trực tiếp: backend chỉ trích định danh rồi gọi endpoint chính thức của Lark.
-4. Kiểm tra ánh xạ: **Mã sản phẩm**, **Màu**, **Ngày kiểm**, và **S / M / L / XL / XXL → 2XL**. Size XS không có thì chọn “Không có size này”. Chọn đúng tên cột được API trả về, không phải nhãn nhóm phía trên cột.
+4. Kiểm tra ánh xạ: **Mã sản phẩm**, **Màu**, **Ngày kiểm**, và **S / M / L / XL**. Hai cột size đã ngừng trong nguồn không được nhập vào ứng dụng. Chọn đúng tên cột được API trả về, không phải nhãn nhóm phía trên cột.
 5. Quy tắc theo người dùng xác nhận: **ô size trống = 0**; **ngày mới nhất theo từng mã–màu**. Mỗi size không được ánh xạ thì không cập nhật, kể cả chế độ ô trống bằng 0.
 6. Chọn xử lý SKU chưa có: mặc định bỏ qua để bảo vệ danh mục; có thể chọn **Tạo SKU còn thiếu ở trạng thái Mở bán** nếu muốn nhập danh mục từ Base. Không tự chuyển sang Tăng trưởng.
 7. **Lưu cấu hình nguồn → Đọc tồn & xem trước**. Kiểm tra tồn hiện tại, tồn Lark, ngày kiểm, SKU sẽ tạo/bỏ qua và mọi cảnh báo.
@@ -33,7 +33,7 @@ Không cần biến môi trường Base mới cho luồng này: URL, ánh xạ v
 ## 3. Quy tắc bảo toàn dữ liệu
 
 - Tồn được lấy từ **các cột size**, không cộng thêm “Tổng số lượng”, “Tồn hôm qua”, “Nhập mới hôm nay”, đơn vị hay giá trị tiền.
-- Mã sản phẩm viết hoa; đối chiếu mã–màu không phân biệt hoa/thường, size XXL ánh xạ 2XL. Không đoán các tên màu gần giống: “Đỏ mận” và “Đỏ” là hai màu khác nhau.
+- Mã sản phẩm viết hoa; đối chiếu mã–màu không phân biệt hoa/thường, chỉ quản lý size S/M/L/XL. Không đoán các tên màu gần giống: “Đỏ mận” và “Đỏ” là hai màu khác nhau.
 - Chỉ đọc **view trong URL**, không tự lấy cả bảng hoặc vượt bộ lọc. Không truyền sort/filter riêng vì Lark có thể bỏ qua view khi dùng các tham số đó.
 - Duyệt hết các trang API; giới hạn 10.000 dòng/120 giây để không nhập thiếu âm thầm. Nếu vượt giới hạn, lọc view theo kỳ tồn và đọc lại.
 - Chọn ngày kiểm mới nhất theo mã–màu trong view. Hai dòng cùng ngày mới nhất bị chặn toàn bộ lần nhập, không cộng dồn hoặc chọn tùy ý.

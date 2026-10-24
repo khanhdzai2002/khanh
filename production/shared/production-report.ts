@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { sizes, type ProductionOrder } from "./domain";
+import { isActiveSize, sizes, type ProductionOrder } from "./domain";
 export const productionReportFilters = z
   .object({
     from: z.iso.date().optional(),
@@ -63,13 +63,16 @@ export function productionReport(
       continue;
     const orderPlaced = o.items.reduce((n, i) => n + i.qty, 0);
     for (const i of o.items) {
+      if (!isActiveSize(i.size)) continue;
       const pending = Math.max(0, i.qty - i.received);
       if (
         (filters.sku && i.sku.toUpperCase() !== filters.sku.toUpperCase()) ||
         (filters.scope === "pending" &&
           !o.items.some(
             (j) =>
-              j.sku.toUpperCase() === i.sku.toUpperCase() && j.qty > j.received,
+              isActiveSize(j.size) &&
+              j.sku.toUpperCase() === i.sku.toUpperCase() &&
+              j.qty > j.received,
           ))
       )
         continue;

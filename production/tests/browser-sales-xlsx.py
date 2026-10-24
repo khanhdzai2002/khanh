@@ -48,8 +48,8 @@ with sync_playwright() as p:
     assert sum(v['r2'] for v in report['variants'])==5
     with page.expect_download() as export:page.get_by_role('link',name='CSV',exact=True).click()
     records=list(csv.reader(io.StringIO(Path(export.value.path()).read_text(encoding='utf-8-sig'))))
-    assert records[0][2:8]==['XS','S','M','L','XL','2XL']
-    assert records[1][4:6]==['10','20'] and records[1][8]=='30'
+    assert records[0][2:6]==['S','M','L','XL']
+    assert records[1][3:5]==['10','20'] and records[1][6]=='30'
     page.get_by_role('button',name='Biểu đồ',exact=True).click()
     expect(page.get_by_role('heading',name='Top mã sản phẩm',exact=True)).to_be_visible()
     expect(page.get_by_role('img',name='Sản lượng sản phẩm lẻ theo ngày',exact=True)).to_be_visible()

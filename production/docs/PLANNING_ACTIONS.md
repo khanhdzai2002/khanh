@@ -8,7 +8,7 @@ Trong **Dự kiến sản xuất**, Administrator hoặc Production Planner dùn
 - Lọc mã/màu/size cần dùng, chọn SKU nếu chỉ muốn cập nhật một phần. Có lựa chọn thì chỉ dùng các SKU đã chọn trong bảng đang xem; chưa chọn thì dùng toàn bộ SKU đang xem. Tối đa 2.000 SKU/lần.
 - Bấm **Cập nhật tồn từ Lark** → kiểm tra tồn trước/sau, ngày kiểm và cảnh báo → **Xác nhận cập nhật tồn kho**.
 - Backend khớp đúng mã–màu–size của SKU đã có; đọc nguồn Wiki/Base đã lưu, không nhận nguồn tùy ý từ Planner. Chỉ Administrator được cấu hình URL/ánh xạ.
-- Quy tắc tồn giữ nguyên: ngày mới nhất theo mã–màu; ô size trống theo cấu hình (mặc định người dùng chọn =0), XXL→2XL; dòng mới nhất trùng bị chặn; tồn cũ hơn số tồn đã biết trong ứng dụng được bỏ qua.
+- Quy tắc tồn giữ nguyên: ngày mới nhất theo mã–màu; ô size trống theo cấu hình (mặc định người dùng chọn =0), chỉ dùng S/M/L/XL; dòng mới nhất trùng bị chặn; tồn cũ hơn số tồn đã biết trong ứng dụng được bỏ qua.
 - SKU không tìm thấy trong nguồn giữ nguyên, có cảnh báo; không ngầm chuyển về 0. Các SKU ngoài phạm vi không bị tạo/cập nhật, kể cả nguồn đã bật tạo SKU còn thiếu.
 - Giữ nguyên hàng đang về, doanh số, vòng đời và SL test. Preview không ghi tồn; confirm có transaction, version, snapshot, audit và chống gửi lặp.
 

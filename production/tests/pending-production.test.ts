@@ -138,7 +138,7 @@ it("size/footer/group totals reconcile and exports have no repeated total rows",
   expect(r.rows.reduce((n, g) => n + g.pending, 0)).toBe(r.total);
   const rows = pendingProductionRows(r);
   expect(rows).toHaveLength(3);
-  expect(rows.slice(1).reduce((n, row) => n + Number(row[8]), 0)).toBe(60);
+  expect(rows.slice(1).reduce((n, row) => n + Number(row[6]), 0)).toBe(60);
 });
 it("zero or unmatched data produces no fake shares; invalid range/size/status blocked", () => {
   expect(pendingProduction([]).slices).toEqual([]);
@@ -209,14 +209,14 @@ it("filtered export uses PostgreSQL pending amounts, authenticated Viewer and va
         base + "/api/export/pending-production?query=miu66%20xam%20tieu&size=S",
       csv = await fetch(url, { headers: { Cookie: cookie } });
     expect(csv.status).toBe(200);
-    expect(await csv.text()).toContain('"MIU66","Xám tiêu","0","70"');
+    expect(await csv.text()).toContain('"MIU66","Xám tiêu","70","0"');
     const excel = await fetch(url + "&format=xlsx", {
         headers: { Cookie: cookie },
       }),
       wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(await excel.arrayBuffer()) as any);
-    expect(wb.worksheets[0].getCell("D2").value).toBe(70);
-    expect(wb.worksheets[0].getCell("I2").value).toBe(70);
+    expect(wb.worksheets[0].getCell("C2").value).toBe(70);
+    expect(wb.worksheets[0].getCell("G2").value).toBe(70);
     expect(
       (
         await fetch(

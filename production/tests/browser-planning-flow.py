@@ -32,7 +32,7 @@ with sync_playwright() as p:
  o=post('/api/orders',{'time':'2026-10-17T10:00:00+07:00','supplier':'SYNTHETIC Factory','delivery':'2026-10-20','requestedBy':'Synthetic Planner','notes':'Synthetic only','status':'Đã xác nhận','items':[{'variantId':m,'qty':30,'priority':'THƯỜNG'}]})
  post('/api/orders/'+o['id']+'/receipts',{'expectedVersion':o['version'],'date':'2026-10-17','note':'Synthetic receipt','lines':[{'itemId':o['items'][0]['id'],'qty':10}]},{'Idempotency-Key':str(uuid.uuid4())})
  post('/api/orders',{'time':'2026-10-17T10:00:00+07:00','supplier':'SYNTHETIC Draft','delivery':None,'requestedBy':'Synthetic Planner','notes':'Do not count draft by default','status':'Nháp','items':[{'variantId':m,'qty':100,'priority':'THƯỜNG'}]})
- source={'url':'https://synthetic.larksuite.com/wiki/SyntheticNode123?table=tblSynthetic&view=vewSynthetic','mapping':{'sku':'Mã sản phẩm','color':'Màu','date':'Ngày kiểm','sizes':{'XS':'','S':'S','M':'M','L':'','XL':'','2XL':''}},'blankAsZero':True,'createMissing':False}
+ source={'url':'https://synthetic.larksuite.com/wiki/SyntheticNode123?table=tblSynthetic&view=vewSynthetic','mapping':{'sku':'Mã sản phẩm','color':'Màu','date':'Ngày kiểm','sizes':{'S':'S','M':'M','L':'','XL':''}},'blankAsZero':True,'createMissing':False}
  post('/api/lark/inventory/source',{'source':source,'version':0})
  page.get_by_role('button',name='Tải lại dữ liệu',exact=True).click()
  page.get_by_role('button',name='Dự kiến sản xuất',exact=True).click()

@@ -9,7 +9,7 @@ const defaults: InventorySource = {
     sku: "Mã sản phẩm",
     color: "Màu",
     date: "Ngày kiểm",
-    sizes: { XS: "", S: "S", M: "M", L: "L", XL: "XL", "2XL": "XXL" },
+    sizes: { S: "S", M: "M", L: "L", XL: "XL" },
   },
   blankAsZero: true,
   createMissing: false,
@@ -114,10 +114,7 @@ export function LarkInventory({ run, busy }: { run: Run; busy: boolean }) {
                 sizes: Object.fromEntries(
                   sizes.map((size) => [
                     size,
-                    find(
-                      source.mapping.sizes[size],
-                      size === "2XL" ? ["xxl", "2xl"] : [size.toLowerCase()],
-                    ),
+                    find(source.mapping.sizes[size], [size.toLowerCase()]),
                   ]),
                 ) as InventorySource["mapping"]["sizes"],
               },

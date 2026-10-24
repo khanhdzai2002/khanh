@@ -116,3 +116,7 @@ Bổ sung chọn nhiều lệnh đổi trạng thái nội bộ, lý do bắt bu
 ### Mục con của biểu đồ chờ
 
 Mở rộng mã ngay tại chú giải thành màu/size với số còn chờ, % trong màu/mã/bộ lọc; truy nguồn đúng size và mở thông tin lệnh. Chỉ đọc, giữ nguyên công thức và bộ lọc khi mở mục con.
+
+### Chính sách size mới thay đặc tả6size
+
+Theo yêu cầu mới, vận hành chỉS/M/L/XL; loại XS/2XL khỏi tạo SKU/lệnh/dự báo/bán hàng/tồnLark/báo cáo. Giữ chứng từ lịch sử, không xóa hay đổi số đã nhận. Backend và migration007 chặn thêm/tăng sản xuất size đã ngừng. Xem `production/docs/ACTIVE_SIZES.md`.

@@ -17,7 +17,7 @@ Các cột cơ bản: `Order ID`, `Order Status`, `Quantity`, `Created Time`. N�
 
 ## Đọc báo cáo
 
-- **Theo mã · màu · size**: mặc định. Mỗi khối là một mã, có tổng bán, tỷ trọng và tín hiệu bán. Mở khối để xem mỗi hàng là một màu, các cột **XS | S | M | L | XL | 2XL**, tổng màu và tỷ trọng trong mã. Có tổng theo size/toàn mã. Ô có lượng bán cao đậm màu hơn; ô không bán hiển thị “—”. Mã và màu bán nhiều được xếp trước; có mở tất cả, thu gọn và xem thêm mã.
+- **Theo mã · màu · size**: mặc định. Mỗi khối là một mã, có tổng bán, tỷ trọng và tín hiệu bán. Mở khối để xem mỗi hàng là một màu, các cột **S | M | L | XL**, tổng màu và tỷ trọng trong mã. Có tổng theo size/toàn mã. Ô có lượng bán cao đậm màu hơn; ô không bán hiển thị “—”. Mã và màu bán nhiều được xếp trước; có mở tất cả, thu gọn và xem thêm mã.
 - **Biểu đồ**: top mã bằng thanh ngang và xu hướng sản lượng theo ngày. Bấm mã trong biểu đồ để lọc về ma trận mã đó.
 - **Chi tiết & dự báo**: bấm số lượng trong ma trận để mở đúng SKU, hoặc mở tab này để sửa tồn, đang về, vòng đời/test và xem công thức. Có chuyển riêng SKU, chuyển cả mã hoặc nhóm đang lọc sang dự báo.
 - **Combo & loại trừ**: chọn riêng combo, chưa rõ SKU hoặc đơn hủy/hoàn/chưa thanh toán. Không cộng các nhóm này vào số sản phẩm lẻ hoặc ma trận. Bộ lọc mã có cả mã chỉ xuất hiện trong đối soát.

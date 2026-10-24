@@ -5,11 +5,11 @@
 - Node.js 24.19.0, npm 11.9.0, PostgreSQL 17 trong Docker; migrations 001–005.
 - `npm run build`: TypeScript và Vite build thành công. Tailwind biên dịch cục bộ; không cần CDN giao diện V9.
 - `npm ci` theo lockfile chạy lại thành công. Sau cài lại, đã khởi động lại Vite để làm mới dependency optimization (server đang chạy trước đó trả 504 cho cache cũ), rồi xác minh login/logout DEV và API trả 401 sau logout.
-- `npm test`: **191 tests passed, 15 files**, không có test skip. 23 tests domain, 51 tests integration PostgreSQL/HTTP và 18 tests Lark mock/security, 10 tests cấu hình origin/callback, 3 tests lọc log 2 tests SDK/web OAuth với transport giả lập 7 tests bootstrap Administrator và 11 tests quản lý thành viên và 7 tests đọc file/ma trận bán hàng, 18 tests tồn kho Lark Base, 9 tests đối soát hàng đang về và 11 tests báo cáo tỷ trọng sản phẩm và 11 tests danh sách/biểu đồ chờ sản xuất và 10 tests trạng thái hàng loạt/màu ưu tiên.
+- `npm test`: **200 tests passed, 16 files**, không có test skip. 23 tests domain, 51 tests integration PostgreSQL/HTTP và 18 tests Lark mock/security, 10 tests cấu hình origin/callback, 3 tests lọc log 2 tests SDK/web OAuth với transport giả lập 7 tests bootstrap Administrator và 11 tests quản lý thành viên và 7 tests đọc file/ma trận bán hàng, 18 tests tồn kho Lark Base, 9 tests đối soát hàng đang về và 11 tests báo cáo tỷ trọng sản phẩm và 11 tests danh sách/biểu đồ chờ sản xuất và 10 tests trạng thái hàng loạt/màu ưu tiên và 9 tests ngừng size cũ.
 - Công thức: một test đối chiếu 400 đầu vào với chính hàm calc V9 trích nguyên văn, kiểm tra need/sale/raw/target/cover/flag. Có test riêng ví dụ 60, làm tròn, ngày chờ opt-in, thiếu tồn, bất thường và bốn vòng đời.
 - Giao dịch: nhiều màu/size, nhận 300+450+250 từ 1.000; chặn vượt nhận; idempotency đồng thời; sửa sau nhận, không giảm dưới đã nhận, không đổi SKU/xóa dòng nhận; revision trước/sau; hai người sửa cùng version; xóa/khôi phục; hủy và reopen; giữ mã đã dùng; trigger bất biến.
 - Import: CSV và XLSX thật, preview chưa ghi báo cáo, confirm lặp, replace giữ nguồn cũ, append bỏ trùng và khóa khi thiếu line ID, bỏ ngày xuất chưa đủ, chuyển bán giữ tồn/inbound/vòng đời/test. JSON V9: phát hiện trùng/số nhận lệch, giữ tồn unknown, không seed sales cũ; nhập lệnh đã xóa có 2 biên nhận và nguồn editLog, nhập bản nháp giữ trạng thái.
-- HTTP: anonymous 401; Origin/CSRF 403; Viewer/Warehouse bị chặn sửa; export Excel đọc ngược bằng ExcelJS xác nhận ma trận XS…2XL.
+- HTTP: anonymous 401; Origin/CSRF 403; Viewer/Warehouse bị chặn sửa; export Excel đọc ngược bằng ExcelJS xác nhận ma trận S/M/L/XL.
 - Lark **mock** (bao gồm PKCE, callback đồng thời, provider lỗi, provider từ chối và error redirect an toàn): thiếu cấu hình 503, state sai/hết hạn/replay bị chặn, tenant sai bị chặn, người mới Viewer với danh tính riêng; production từ chối DEV_AUTH=true. Không dùng credential thật trong test.
 
 ## Kiểm tra trình duyệt
@@ -122,7 +122,7 @@ Trong quá trình phát triển có các lần smoke dừng do locator revision 
 
 Đã kiểm tra file thật người dùng gửi **chỉ đọc trong bộ nhớ**, không import vào database hoặc đưa nội dung file/đơn vào Git. Dùng `npm run sales:check -- <file>`; đầu ra là metadata/tổng hợp, không in mã đơn/người mua/liên hệ. Xem [SALES_REPORT.md](SALES_REPORT.md).
 
-Smoke Chromium trên dữ liệu tổng hợp: `browser-sales.py` đã cập nhật cho UI ma trận/tab mới và nhận diện file trước preview. `browser-sales-xlsx.py` tạo fixture XLSX phân mảnh trong /tmp: kiểm tra tự điền kỳ/thời điểm xuất, preview ma trận đủ tổng trước ghi, xác nhận, M/L/tổng đúng, bỏ ngày chưa trọn trong tốc độ, CSV ma trận có XS…2XL, tab biểu đồ và xuất chỉ nhóm loại trừ, responsive 390px sau khi điều hướng hoàn tất animation. Không có pageerror. Chạy sau serve-smoke/Vite như hướng dẫn trước:
+Smoke Chromium trên dữ liệu tổng hợp: `browser-sales.py` đã cập nhật cho UI ma trận/tab mới và nhận diện file trước preview. `browser-sales-xlsx.py` tạo fixture XLSX phân mảnh trong /tmp: kiểm tra tự điền kỳ/thời điểm xuất, preview ma trận đủ tổng trước ghi, xác nhận, M/L/tổng đúng, bỏ ngày chưa trọn trong tốc độ, CSV ma trận có S/M/L/XL, tab biểu đồ và xuất chỉ nhóm loại trừ, responsive 390px sau khi điều hướng hoàn tất animation. Không có pageerror. Chạy sau serve-smoke/Vite như hướng dẫn trước:
 
 ```bash
 python tests/browser-sales.py
@@ -134,7 +134,7 @@ Luồng core lệnh/giao nhận đã chạy lại bằng `browser-workflow.py` v
 
 ## Tồn kho Lark Base
 
-15 tests mới kiểm tra nhập tồn đầu tiên cho SKU chưa có tồn dù ngày tạo danh mục mới hơn nguồn, URL Wiki/Base/SSRF, quy tắc ngày mới nhất/ô trống=0/XXL, timestamp và công thức, dòng trùng, giá trị âm/lẻ/lỗi, phân trang search API đúng view, quyền API/tài liệu bị từ chối, cột đổi tên, source version, preview không ghi tồn, confirm thay thế giữ nguyên V9 inputs, idempotency, snapshot/audit trước–sau, tạo SKU có lựa chọn, rollback khi xung đột, bảo vệ tồn mới, hết hạn preview, quyền Administrator/session/CSRF. Migration 006 chỉ thêm bảng cấu hình nguồn; test migration kiểm tra đủ 6 migrations và chạy lại/đồng thời không sửa lệnh, biên nhận hay lịch sử.
+15 tests mới kiểm tra nhập tồn đầu tiên cho SKU chưa có tồn dù ngày tạo danh mục mới hơn nguồn, URL Wiki/Base/SSRF, quy tắc ngày mới nhất/ô trống=0/XXL, timestamp và công thức, dòng trùng, giá trị âm/lẻ/lỗi, phân trang search API đúng view, quyền API/tài liệu bị từ chối, cột đổi tên, source version, preview không ghi tồn, confirm thay thế giữ nguyên V9 inputs, idempotency, snapshot/audit trước–sau, tạo SKU có lựa chọn, rollback khi xung đột, bảo vệ tồn mới, hết hạn preview, quyền Administrator/session/CSRF. Migration 006 chỉ thêm bảng cấu hình nguồn; test migration kiểm tra đủ 7 migrations và chạy lại/đồng thời không sửa lệnh, biên nhận hay lịch sử.
 
 `python3 tests/browser-lark-inventory.py` với `tests/serve-smoke.ts` + Vite 5175: Chromium desktop/390px, đọc cột Lark giả lập, mặc định ô trống=0, ánh xạ XXL, lưu nguồn thật vào `_test`, preview dùng record tổng hợp và không ghi SKU, xác nhận qua API thật tạo đúng 5 SKU (tổng 23), tải lại giữ cấu hình, không lỗi JavaScript/tràn trang. Nguồn Lark được giả lập; chưa kiểm thử quyền hoặc dữ liệu Base thật. Không sửa dữ liệu công ty.
 
@@ -166,3 +166,8 @@ Luồng core lệnh/giao nhận đã chạy lại bằng `browser-workflow.py` v
 2tests thêm vào pending-production kiểm tra mẫu số tỷ trọng trong mã/trong màu/trong bộ lọc, số lệnh duy nhất, cộng màu/size bằng tổng và trạng thái dữ liệu0/đã lọc. Browser pending-production mở mã ngay tại chú giải không lọc ngầm, thấy size trong màu mặc định, kiểm tra tỷ trọng, size0disabled, chọn sizeS chỉ có cộtS/nguồn cóS còn chờ, bấm mã lệnh mở chi tiết; Lọc riêng mã vẫn dùng được; desktop/mobile không tràn/lỗi JS.
 
 Fixture HTTP bootstrap Administrator nay đợi đọc xong response tạo session trước khi dùng cookie, tránh đua giữa nhận headers và ghi session PostgreSQL. Không đổi logic xác thực hoặc phân quyền của ứng dụng.
+
+
+## Ngừng hai size cũ
+
+9 tests `retired-sizes.test.ts` kiểm tra policy4size, historical SKU đọc được nhưng không dự báo, backend/DB chặn tạo/thêm/tăng, giữ ID/số đặt/nhận khi sửa metadata và nhận tất toán lịch sử, danh mục/báo cáo chỉsizehiệnhành, không ánh xạ XS→S/XXL→XL, mappingLark/version. Fixture lịch sử dùng riêng `_test`, tạm nạp dữ liệu mô phỏng trước policy rồi bật lại các trigger trước mọi assertion. Migration không xóa dữ liệu cũ. Các test trước cập nhật đủ4cột và tổng tương ứng. 6browserflows đạt (active sizes, core workflow, planning flow, Lark inventory, sales XLSX, pending production) trên dữ liệu tổng hợp, gồm desktop/mobile.

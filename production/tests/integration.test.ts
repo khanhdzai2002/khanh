@@ -150,7 +150,7 @@ describe("PostgreSQL — giao dịch lệnh và biên nhận", () => {
         (await pool.query("SELECT count(*) AS n FROM schema_migrations"))
           .rows[0].n,
       ),
-    ).toBe(6);
+    ).toBe(7);
   });
   it("tạo lệnh nhiều màu nhiều size, không tự chuyển Nháp thành đã gửi", async () => {
     const ids: string[] = [];
@@ -883,8 +883,10 @@ it("xuất XLSX lệnh là ma trận size, không phải HTML đổi đuôi", as
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(await response.arrayBuffer()) as any);
     const header = wb.worksheets[0].getRow(1).values;
-    expect(header).toContain("XS");
-    expect(header).toContain("2XL");
+    expect(header).not.toContain("XS");
+    expect(header).toContain("S");
+    expect(header).not.toContain("2XL");
+    expect(header).toContain("XL");
     expect(wb.worksheets[0].getRow(2).values).toContain(60);
   } finally {
     await new Promise<void>((ok) => server.close(() => ok()));
@@ -995,7 +997,7 @@ describe("V9 thao tác lập lệnh và lọc bán hàng", () => {
       id: randomUUID(),
       sku: "TEST-UNUSED",
       color: "Cam",
-      size: "XS",
+      size: "XL",
     });
     await expect(compose(unused)).rejects.toThrow("không có trong lệnh");
   });
@@ -1473,11 +1475,11 @@ it("export ma trận có đủ size/tổng màu; đối soát xuất đúng nhó
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(Buffer.from(await response.arrayBuffer()) as any);
     expect(wb.worksheets[0].getRow(1).values).toEqual(
-      expect.arrayContaining(["XS", "S", "M", "L", "XL", "2XL", "Tổng màu"]),
+      expect.arrayContaining(["S", "M", "L", "XL", "Tổng màu"]),
     );
-    expect(wb.worksheets[0].getRow(2).getCell(5).value).toBe(10);
-    expect(wb.worksheets[0].getRow(2).getCell(6).value).toBe(20);
-    expect(wb.worksheets[0].getRow(2).getCell(9).value).toBe(30);
+    expect(wb.worksheets[0].getRow(2).getCell(4).value).toBe(10);
+    expect(wb.worksheets[0].getRow(2).getCell(5).value).toBe(20);
+    expect(wb.worksheets[0].getRow(2).getCell(7).value).toBe(30);
     const excluded = await (
       await fetch(base + "/api/export/reconciliation?bucket=excluded", {
         headers,

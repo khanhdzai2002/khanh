@@ -137,7 +137,7 @@ it("ma trận nhóm theo mã → màu → size, sắp bán nhiều trước và 
     qty: 37,
     r2: 18.5,
     r7: 6,
-    sizeTotals: { S: 10, M: 20, L: 7, XS: 0, XL: 0, "2XL": 0 },
+    sizeTotals: { S: 10, M: 20, L: 7, XL: 0 },
   });
   expect(p.colors[0]).toMatchObject({ color: "Trắng", qty: 30 });
   expect(p.colors.reduce((n, c) => n + c.qty, 0)).toBe(p.qty);

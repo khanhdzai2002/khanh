@@ -1,3 +1,4 @@
+import { isActiveSize, historicalSizes } from "./domain";
 import { salesDay } from "./sales-file";
 export type SalesRow = {
   lineKey: string;
@@ -96,6 +97,9 @@ export function parseSalesRow(
     sku === "CHƯA RÕ MÃ" ||
     size === "CHƯA RÕ SIZE" ||
     color === "(Không rõ màu)";
+  const retired =
+    (historicalSizes as readonly string[]).includes(size) &&
+    !isActiveSize(size);
   return {
     lineKey,
     date,
@@ -104,21 +108,24 @@ export function parseSalesRow(
     color,
     size,
     qty: excluded ? qty : Math.max(0, qty - returned),
-    kind: excluded
-      ? "excluded"
-      : combo
-        ? "combo"
-        : unknown
-          ? "unknown"
-          : "single",
+    kind:
+      excluded || retired
+        ? "excluded"
+        : combo
+          ? "combo"
+          : unknown
+            ? "unknown"
+            : "single",
     variation,
-    reason: excluded
-      ? status + " / " + typ
-      : combo
-        ? "Combo chưa phân bổ màu/size"
-        : unknown
-          ? "Thiếu mã, màu hoặc size"
-          : "",
+    reason: retired
+      ? "Size đã ngừng kinh doanh"
+      : excluded
+        ? status + " / " + typ
+        : combo
+          ? "Combo chưa phân bổ màu/size"
+          : unknown
+            ? "Thiếu mã, màu hoặc size"
+            : "",
   };
 }
 export function shiftDay(day: string, n: number) {

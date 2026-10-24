@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { audit, type DB } from "./db";
-import { AppError } from "../shared/domain";
+import { AppError, isActiveSize } from "../shared/domain";
 import type { Actor } from "./service";
 export const inboundRequest = z
   .object({
@@ -39,6 +39,11 @@ export async function previewInbound(db: DB, actor: Actor, raw: unknown) {
       [input.ids],
     )
   ).rows;
+  if (variants.some((v) => !isActiveSize(v.body.size)))
+    throw new AppError(
+      400,
+      "Chỉ đối soát các size đang kinh doanh: S, M, L, XL",
+    );
   if (variants.length !== input.ids.length)
     throw new AppError(409, "SKU đã thay đổi hoặc không còn tồn tại");
   const reasons: Record<string, string> = {};

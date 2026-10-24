@@ -872,7 +872,7 @@ td input {
 }
 .size-inputs {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 12px;
 }
 .size-inputs input {
@@ -1731,7 +1731,7 @@ summary {
 .pending-color-toggle { width: 100%; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; padding: 10px; text-align: left; }
 .pending-color-toggle small { flex-basis: 100%; }
 .pending-color-content { padding: 10px; }
-.pending-size-breakdown { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+.pending-size-breakdown { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 6px; }
 .pending-size-breakdown button { display: flex; flex-direction: column; padding: 8px 4px; gap: 4px; }
 .pending-size-breakdown button strong { color: #c85512; }
 .pending-size-breakdown span,.pending-size-breakdown small { font-size: 11px; }
@@ -1739,3 +1739,5 @@ summary {
 @media(max-width:750px) { .pending-legend-line { gap: 6px; font-size: 12px; } }
 .pending-product-breakdown { min-width: 0; }
 .pending-color-toggle strong { min-width: 0; overflow-wrap: anywhere; }
+
+@media(max-width:750px) { .pending-size-breakdown { grid-template-columns: repeat(2,minmax(0,1fr)); } }

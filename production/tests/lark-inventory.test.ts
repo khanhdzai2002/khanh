@@ -30,7 +30,7 @@ const source: InventorySource = inventorySourceSchema.parse({
     sku: "Mã sản phẩm",
     color: "Màu",
     date: "Ngày kiểm",
-    sizes: { XS: "", S: "S", M: "M", L: "", XL: "", "2XL": "XXL" },
+    sizes: { S: "S", M: "M", L: "", XL: "XL" },
   },
   blankAsZero: true,
   createMissing: false,
@@ -47,7 +47,7 @@ const record = (
     "Ngày kiểm": date,
     S: 11,
     M: 12,
-    XXL: null,
+    XL: null,
     ...extra,
   },
 });
@@ -84,7 +84,7 @@ it("parses wiki/base identifiers; rejects arbitrary URLs and missing view", () =
   ])
     expect(() => parseBaseUrl(url)).toThrow();
 });
-it("takes latest date per product/colour, zeroes blank size, maps XXL only once", () => {
+it("takes latest date per product/colour, zeroes blank size, maps active XL only once", () => {
   const result = normalizeInventory(
     [record("old", "2026-10-14", { S: 999 }), record("new")],
     source,
@@ -93,7 +93,7 @@ it("takes latest date per product/colour, zeroes blank size, maps XXL only once"
   expect(result.rows.map((r) => [r.size, r.stock])).toEqual([
     ["S", 11],
     ["M", 12],
-    ["2XL", 0],
+    ["XL", 0],
   ]);
   expect(result.warnings.join()).toContain("1 dòng ngày kiểm cũ");
 });
@@ -153,7 +153,7 @@ it("validates mapping: repeated column or no size is rejected", () => {
       ...source,
       mapping: {
         ...source.mapping,
-        sizes: { XS: "", S: "", M: "", L: "", XL: "", "2XL": "" },
+        sizes: { S: "", M: "", L: "", XL: "" },
       },
     }).success,
   ).toBe(false);
@@ -175,7 +175,7 @@ function client() {
         list: vi.fn().mockResolvedValue({
           code: 0,
           data: {
-            items: ["Mã sản phẩm", "Màu", "Ngày kiểm", "S", "M", "XXL"].map(
+            items: ["Mã sản phẩm", "Màu", "Ngày kiểm", "S", "M", "XL"].map(
               (field_name) => ({ field_name, type: 1 }),
             ),
           },
@@ -209,7 +209,7 @@ it("resolves Wiki to Base then pages current search API within selected view and
     path: { app_token: "SyntheticBase123", table_id: "tblSynthetic" },
     data: {
       view_id: "vewSynthetic",
-      field_names: ["Mã sản phẩm", "Màu", "Ngày kiểm", "S", "M", "XXL"],
+      field_names: ["Mã sản phẩm", "Màu", "Ngày kiểm", "S", "M", "XL"],
     },
   });
   expect(
@@ -329,7 +329,7 @@ it("creates missing SKUs only when opted in; zero size stays known zero and open
   expect(p.count).toBe(3);
   await tx((db) => confirmInventory(db, actor, p.id));
   expect(await variants()).toHaveLength(3);
-  expect((await variants()).find((v) => v.size === "2XL")).toMatchObject({
+  expect((await variants()).find((v) => v.size === "XL")).toMatchObject({
     stock: 0,
     health: "Mở bán",
     inbound: 0,

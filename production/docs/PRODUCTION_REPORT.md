@@ -6,7 +6,7 @@ Mở **Gối lệnh sản xuất → Báo cáo tỷ trọng sản phẩm**. Ch�
 
 - KPI theo đúng bộ lọc: số mã, số lệnh duy nhất, tổng đã đặt/đã nhận/còn chờ, số lệnh quá hạn.
 - Biểu đồ thanh top10 mã theo số còn chờ hoặc số đã đặt. Bấm mã để lọc. Tỷ trọng tính trên tất cả mã phù hợp bộ lọc, không chỉ top10.
-- Thẻ từng mã: sản lượng, tỷ trọng, số lệnh/xưởng/màu, tiến độ nhận và cảnh báo quá hạn. Mở thẻ để xem ma trận màu × XS/S/M/L/XL/2XL.
+- Thẻ từng mã: sản lượng, tỷ trọng, số lệnh/xưởng/màu, tiến độ nhận và cảnh báo quá hạn. Mở thẻ để xem ma trận màu × S/M/L/XL.
 - Bảng lệnh của mỗi mã: mã lệnh có thể bấm mở chi tiết/giao nhận, xưởng, hẹn giao, đã đặt/nhận/còn chờ, tỷ trọng mã trong lệnh, tình trạng quá hạn.
 - Chọn một lệnh cụ thể để xem cơ cấu sản phẩm của lệnh đó, hoặc tổng hợp nhiều lệnh.
 - Xuất CSV/Excel đúng bộ lọc, dữ liệu từng dòng mã–màu–size–lệnh. Không có dòng tổng trộn vào chi tiết để tránh cộng trùng.

@@ -1,6 +1,9 @@
 import { z } from "zod";
 export const stages = ["Mở bán", "Tăng trưởng", "Giảm sút", "Xả kho"] as const;
-export const sizes = ["XS", "S", "M", "L", "XL", "2XL"] as const;
+export const sizes = ["S", "M", "L", "XL"] as const;
+export const historicalSizes = ["XS", ...sizes, "2XL"] as const;
+export const isActiveSize = (size: string) =>
+  (sizes as readonly string[]).includes(size);
 export const priorities = ["THƯỜNG", "ƯU TIÊN", "CẤP BÁCH"] as const;
 export const statuses = [
   "Nháp",
@@ -63,7 +66,10 @@ export const skuSchema = z
     salesSource: z.string().max(300).default("Nhập thủ công"),
   })
   .strict();
-export type Sku = z.infer<typeof skuSchema>;
+export const historicalSkuSchema = skuSchema.extend({
+  size: z.enum(historicalSizes),
+});
+export type Sku = z.infer<typeof historicalSkuSchema>;
 export type Variant = Sku & { id: string; version: number };
 export function forecast(row: Sku, policy: Policy = defaultPolicy) {
   const valid = policySchema.safeParse(policy).success;
@@ -74,6 +80,17 @@ export function forecast(row: Sku, policy: Policy = defaultPolicy) {
     policy.targetDays +
     policy.safeDays +
     (policy.includeLead ? policy.leadDays : 0);
+  if (!isActiveSize(row.size))
+    return {
+      need: 0,
+      raw: 0,
+      target: 0,
+      sale,
+      cover,
+      effectiveDays,
+      flag: "retired",
+      basis: "Size đã ngừng kinh doanh",
+    };
   let need = 0,
     raw = 0,
     target = 0,

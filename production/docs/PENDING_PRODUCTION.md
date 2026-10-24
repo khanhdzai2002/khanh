@@ -11,7 +11,7 @@ Mở **Gối lệnh sản xuất → Danh sách lệnh**, cuộn xuống **Chờ
 
 ## Cách tính
 
-Mỗi dòng là một mã + màu, các cột XS/S/M/L/XL/2XL là **tổng đã đặt trừ tổng đã nhận** của đúng SKU trong các lệnh hợp lệ. Chỉ lấy dòng còn chờ >0; size đã nhận đủ hiển thị0 khi nhóm vẫn còn các size khác. Không cộng lại số đã nhận hoặc cộng thêm tồn/hàng đang về nhập tay.
+Mỗi dòng là một mã + màu, các cột S/M/L/XL là **tổng đã đặt trừ tổng đã nhận** của đúng SKU trong các lệnh hợp lệ. Chỉ lấy dòng còn chờ >0; size đã nhận đủ hiển thị0 khi nhóm vẫn còn các size khác. Không cộng lại số đã nhận hoặc cộng thêm tồn/hàng đang về nhập tay.
 
 Nhãn “chờ sản xuất” ở đây là **số xưởng còn chưa giao/ứng dụng chưa ghi nhận**, bao gồm cả đang sản xuất. Không giả định tất cả số này đều chưa bắt đầu sản xuất. Không sửa trạng thái lệnh, dự báo, tồn hoặc biên nhận khi xem báo cáo.
 
@@ -29,7 +29,7 @@ Có hơn8 mã thì hiển thị8 mã lớn nhất và nhóm Khác. Khác vẫn c
 
 ## Xuất và giới hạn hiển thị
 
-CSV/Excel xuất các nhóm mã–màu theo đúng bộ lọc, đủ6 size, tổng còn chờ, số lệnh, ngày hẹn sớm nhất, cờ quá hạn và danh sách mã lệnh liên quan. Mỗi nhóm chỉ có một dòng; không trộn dòng tổng vào chi tiết. Tải tối đa100 nhóm đầu trên giao diện rồi bấm Xem thêm100; chân bảng và biểu đồ luôn tính trên toàn bộ bộ lọc, file xuất cũng lấy toàn bộ.
+CSV/Excel xuất các nhóm mã–màu theo đúng bộ lọc, đủ4 size, tổng còn chờ, số lệnh, ngày hẹn sớm nhất, cờ quá hạn và danh sách mã lệnh liên quan. Mỗi nhóm chỉ có một dòng; không trộn dòng tổng vào chi tiết. Tải tối đa100 nhóm đầu trên giao diện rồi bấm Xem thêm100; chân bảng và biểu đồ luôn tính trên toàn bộ bộ lọc, file xuất cũng lấy toàn bộ.
 
 Giao diện cập nhật theo dữ liệu ứng dụng tải được sau thao tác hoặc nút Tải lại; không phải luồng dữ liệu trực tiếp từ xưởng. File xuất đọc PostgreSQL trong transaction REPEATABLE READ. Nếu dữ liệu vừa được người khác sửa, tải lại màn hình để đối chiếu với file mới.
 

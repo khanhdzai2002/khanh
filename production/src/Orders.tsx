@@ -13,6 +13,7 @@ import {
 import { api, send } from "./api";
 import {
   sizes,
+  isActiveSize,
   priorities,
   statuses,
   forecast,
@@ -77,7 +78,11 @@ export function Orders({
   useEffect(() => {
     if (seed.length && page === "orders") setEditing("new");
   }, [seed, page]);
-  const all = data.orders.filter((o) => !!o.deletedAt === archived),
+  const all = data.orders.filter(
+      (o) =>
+        !!o.deletedAt === archived &&
+        (page !== "orders" || o.items.some((i) => isActiveSize(i.size))),
+    ),
     rows = all.filter(
       (o) =>
         (!search ||
@@ -159,6 +164,14 @@ export function Orders({
           </div>
         ))}
       </div>
+      {page === "orders" &&
+        all.some((o) => o.items.some((i) => !isActiveSize(i.size))) && (
+          <Notice>
+            Danh sách có chứng từ lịch sử chứa size đã ngừng. Tổng của lệnh giữ
+            đúng chứng từ gốc; các báo cáo sản xuất chỉ tính S, M, L, XL. Xem
+            chi tiết lệnh để đối soát phần lịch sử.
+          </Notice>
+        )}
       {page === "orders" && (
         <div className="tabs">
           <button
@@ -908,6 +921,12 @@ function OrderEditor({
             </label>
           </Notice>
         )}
+        {order?.items.some((i) => !isActiveSize(i.size)) && (
+          <Notice>
+            Lệnh có dòng size cũ đã ngừng kinh doanh. Các dòng đó giữ nguyên
+            ngoài bảng nhập mới; xem số liệu gốc tại chi tiết/lịch sử lệnh.
+          </Notice>
+        )}
         <div className="table-scroll order-matrix">
           <table>
             <thead>
@@ -925,7 +944,7 @@ function OrderEditor({
             <tbody>
               {!groups.size && (
                 <tr>
-                  <td colSpan={11} className="muted">
+                  <td colSpan={sizes.length + 5} className="muted">
                     Lệnh chưa có sản phẩm. Thêm từ danh mục hoặc nhập mã/màu mới
                     bên dưới.
                   </td>
@@ -1004,7 +1023,17 @@ function OrderEditor({
                     )}
                   </th>
                 ))}
-                <th>{fmt(form.items.reduce((n, i) => n + i.qty, 0))}</th>
+                <th>
+                  {fmt(
+                    form.items
+                      .filter((i) =>
+                        sizes.some(
+                          (s) => variants.get(i.variantId)?.size === s,
+                        ),
+                      )
+                      .reduce((n, i) => n + i.qty, 0),
+                  )}
+                </th>
                 <th colSpan={2} />
               </tr>
             </tfoot>

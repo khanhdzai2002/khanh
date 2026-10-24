@@ -18,13 +18,13 @@ Xuất file từ Dự kiến sản xuất để lấy tên cột. Nhập CSV/XLS
 ma_sp,mau,size,ban_ngay_1,ban_ngay_2,ton_hien_tai,hang_dang_ve,trang_thai_san_pham,ngay_bat_thuong,tb_chuan_thu_cong,sl_test
 ```
 
-Một dòng là một mã–màu–size. Tồn trống nghĩa là CHƯA NHẬP TỒN, khác số 0. Trạng thái là Mở bán/Tăng trưởng/Giảm sút/Xả kho; size XS/S/M/L/XL/2XL. Nhập có preview và chống trùng; không ghi đè số hiện có. Với SKU hiện hữu, sửa trực tiếp bảng hoặc form sửa. Hàng đang về nhập tay không tự cộng thêm nợ xưởng từ lịch sử.
+Một dòng là một mã–màu–size. Tồn trống nghĩa là CHƯA NHẬP TỒN, khác số 0. Trạng thái là Mở bán/Tăng trưởng/Giảm sút/Xả kho; size S/M/L/XL. Nhập có preview và chống trùng; không ghi đè số hiện có. Với SKU hiện hữu, sửa trực tiếp bảng hoặc form sửa. Hàng đang về nhập tay không tự cộng thêm nợ xưởng từ lịch sử.
 
 ## TikTok Shop
 
 Chọn file xuất trực tiếp CSV hoặc XLSX, sheet đầu tiên. Cần Order ID, Order Status, Quantity, Created Time, Variation và Product Name hoặc Seller SKU; cột hoàn trả là `Sku Quantity of return`, `Cancelation/Return Type`. Kê khai kỳ báo cáo và thời điểm xuất theo Việt Nam, không dùng thời điểm đơn mới nhất thay thời điểm xuất.
 
-Xem trước thể hiện: sản phẩm lẻ hợp lệ, lượt combo, bị loại, chưa rõ SKU; tối đa 100 dòng mẫu. Combo là lượt mua combo chưa phân bổ, không nhân 2/3 về một SKU. Dòng thiếu mã/màu/size giữ ở đối soát. Alias XXL → 2XL và ánh xạ màu MIU66/MIU01/MIU37 theo V9 được áp dụng. Mọi trường số lượng phải là số nguyên không âm.
+Xem trước thể hiện: sản phẩm lẻ hợp lệ, lượt combo, bị loại, chưa rõ SKU; tối đa 100 dòng mẫu. Combo là lượt mua combo chưa phân bổ, không nhân 2/3 về một SKU. Dòng thiếu mã/màu/size giữ ở đối soát. Dòng có size đã ngừng được đưa vào nhóm loại trừ; giữ ánh xạ màu MIU66/MIU01/MIU37 theo V9. Mọi trường số lượng phải là số nguyên không âm.
 
 Hai lựa chọn ghi:
 

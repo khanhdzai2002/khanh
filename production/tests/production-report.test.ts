@@ -161,7 +161,7 @@ it("product, colour and size rollups conserve quantities and unique order counts
     item("B", 5, 1, "Đen", "XL"),
   ]);
   const r = productionReport(
-    [o, order([item("A", 7, 1, "Trắng", "2XL")])],
+    [o, order([item("A", 7, 1, "Trắng", "XL")])],
     {},
     today,
   );

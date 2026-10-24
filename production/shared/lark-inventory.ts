@@ -11,12 +11,10 @@ export const inventorySourceSchema = z
         date: field,
         sizes: z
           .object({
-            XS: z.string().max(200),
             S: z.string().max(200),
             M: z.string().max(200),
             L: z.string().max(200),
             XL: z.string().max(200),
-            "2XL": z.string().max(200),
           })
           .strict(),
       })
@@ -32,6 +30,15 @@ export const inventorySourceSchema = z
       v.mapping.date,
       ...Object.values(v.mapping.sizes).filter(Boolean),
     ];
+    if (
+      Object.values(v.mapping.sizes).some((n) =>
+        /^(XS|2XL|XXL)$/i.test(n.trim().replace(/^#\s*/, "")),
+      )
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "Không ánh xạ cột size đã ngừng kinh doanh",
+      });
     if (!Object.values(v.mapping.sizes).some(Boolean))
       ctx.addIssue({ code: "custom", message: "Chọn ít nhất một cột size" });
     if (new Set(names).size !== names.length)
