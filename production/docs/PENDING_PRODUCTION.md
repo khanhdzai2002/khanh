@@ -23,7 +23,7 @@ Bấm **Xem lệnh mã/màu** để mở cửa sổ đối soát nguồn: mã l�
 
 ## Biểu đồ tròn
 
-Dạng donut: giữa là tổng số sản phẩm còn chờ, mỗi phần là một mã. Chú giải ghi mã, số sản phẩm và %. Tỷ trọng = số sản phẩm còn chờ của mã / tổng còn chờ trong bộ lọc ×100, **không phải số lệnh**. Bấm mã ở chú giải để lọc nhanh.
+Dạng donut: giữa là tổng số sản phẩm còn chờ, mỗi phần là một mã. Chú giải ghi mã, số sản phẩm và %. Tỷ trọng = số sản phẩm còn chờ của mã / tổng còn chờ trong bộ lọc ×100, **không phải số lệnh**. Bấm mã ở chú giải để mở chi tiết màu–size ngay bên dưới, không tự thay đổi bộ lọc hoặc tỷ trọng biểu đồ. Muốn lọc riêng, dùng nút Lọc riêng mã trong mục mở rộng.
 
 Có hơn8 mã thì hiển thị8 mã lớn nhất và nhóm Khác. Khác vẫn cộng đủ toàn bộ mã còn lại để tổng số lượng/tỷ trọng không mất dữ liệu. Dùng bộ lọc mã để xem mã nằm trong Khác. Tổng bằng0 không dựng tỷ trọng hoặc số liệu giả.
 
@@ -40,3 +40,15 @@ Phần này chỉ đọc, theo quyền xem lệnh hiện có (kể cả Viewer);
 179tests/14file đạt. 9tests mới kiểm tra cộng nhiều lệnh/size/màu, trừ nhận một phần, search không dấu/thứ tự từ, các bộ lọc và ngày Việt Nam, loại xóa/hủy/đã đủ/nháp/tạm dừng, donut8+Khác bảo toàn tổng/tỷ trọng, nhóm/cột size/CSV cộng khớp tổng, dữ liệu0/ngày sai, số lệnh duy nhất/quá hạn và xuất CSV/Excel có session/Viewer trên PostgreSQL `_test`.
 
 Chromium desktop1440/mobile390px xác minh bảng xuất hiện dưới danh sách lệnh, donut285 từ dữ liệu tổng hợp, truy vấn MIU66/Xám tiêu S85/M60/L40, lệnh nguồn và chi tiết lệnh, CSV đúng bộ lọc, size/xưởng/mã/màu, bấm chú giải, đổi mã bỏ màu cũ, không có kết quả, ngày đảo ngược và bật nháp có chủ ý. Không lỗi JavaScript/tràn trang. Không kiểm thử bằng dữ liệu công ty và chưa xác minh triển khai Railway.
+
+
+## Mục con ngay dưới mã ở biểu đồ
+
+- Bấm mã (ví dụ MIU37) để mở/thu gọn ngay tại chú giải. Hiện tổng còn chờ, số màu, số lệnh duy nhất và tỷ trọng của mã trong bộ lọc.
+- Mặc định mở sẵn tối đa3màu đầu để thấy size ngay. Bấm tên màu để thu gọn/mở; có Mở tất cả màu và Thu gọn màu.
+- Mỗi màu có số sản phẩm và % trong mã; mỗi size có số sản phẩm, % trong màu và % trong mã. Các mẫu số đều lấy cùng bộ lọc hiện tại, không lấy số đã đặt hoặc tự cộng dữ liệu ngoài bộ lọc.
+- Bấm size có số lượng >0 để xem đúng nguồn lệnh của mã–màu–size đó. Cửa sổ chỉ hiển thị cột size đã chọn, số còn chờ tương ứng, xưởng và hẹn giao; size0khóa nút.
+- Bấm Xem các lệnh của màu để xem nguồn theo tất cả size đang phù hợp bộ lọc. Bấm mã lệnh mở chi tiết/giao nhận lệnh hiện có, đóng cửa sổ nguồn trước để không chồng hai cửa sổ.
+- Mở mục con không tự lọc mã, giữ nguyên tỷ trọng trong toàn bộ dashboard. Nút Lọc riêng mã là hành động riêng; khi lọc một mã thì tỷ trọng mã trong bộ lọc có thể100%.
+
+191tests/15file đạt. 2tests mới kiểm tra MIU37 tổng3200 từ dữ liệu tổng hợp, màu2000chiếm62,5% mã/50% tổng4000, size400chiếm20% màu/12,5% mã, bảo toàn tổng/phần trăm, lệnh duy nhất và dữ liệu theo bộ lọc/không có mã. Browser xác minh mở mục con không đổi tổng285, màu/size hiện ngay, size0khóa, chọn S chỉ có lệnh S70/S15 và mở lệnh thật trong `_test`, lọc riêng mã, desktop/mobile. Không thay dữ liệu công ty.

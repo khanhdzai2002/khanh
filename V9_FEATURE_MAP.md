@@ -112,3 +112,7 @@ Thêm ngay dưới danh sách lệnh: cộng phần chưa nhận theo mã–màu
 ### Cập nhật trạng thái nhiều lệnh
 
 Bổ sung chọn nhiều lệnh đổi trạng thái nội bộ, lý do bắt buộc, transaction/version/revision/audit, không sửa dòng hoặc biên nhận. Màu ưu tiên3mức giữ nguyên giá trị V9. Xem `production/docs/BULK_ORDER_STATUS.md`.
+
+### Mục con của biểu đồ chờ
+
+Mở rộng mã ngay tại chú giải thành màu/size với số còn chờ, % trong màu/mã/bộ lọc; truy nguồn đúng size và mở thông tin lệnh. Chỉ đọc, giữ nguyên công thức và bộ lọc khi mở mục con.

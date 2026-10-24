@@ -177,3 +177,30 @@ export function pendingProductionRows(
     ]),
   ];
 }
+
+// All denominators come from the same filtered snapshot as the donut.
+export function pendingProductBreakdown(
+  report: ReturnType<typeof pendingProduction>,
+  sku: string,
+) {
+  const product = report.products.find((p) => p.sku === sku);
+  if (!product) return null;
+  const groups = report.rows.filter((r) => r.sku === sku);
+  return {
+    ...product,
+    orderCount: new Set(groups.flatMap((r) => r.sources.map((s) => s.id))).size,
+    colors: groups.map((r) => ({
+      ...r,
+      shareOfProduct: product.pending ? (r.pending / product.pending) * 100 : 0,
+      shareOfReport: report.total ? (r.pending / report.total) * 100 : 0,
+      sizes: sizes.map((size) => ({
+        size,
+        pending: r.quantities[size],
+        shareOfColor: r.pending ? (r.quantities[size] / r.pending) * 100 : 0,
+        shareOfProduct: product.pending
+          ? (r.quantities[size] / product.pending) * 100
+          : 0,
+      })),
+    })),
+  };
+}

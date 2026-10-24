@@ -1720,3 +1720,22 @@ summary {
 .priority-select { font-weight: 750; min-width: 125px; }
 .priority-legend { display: flex; gap: 10px; padding: 12px 20px; align-items: center; flex-wrap: wrap; color: #6b7280; }
 @media print { .priority-badge { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }
+
+.pending-legend > .pending-legend-entry { display: block; }
+.pending-legend-line { display: grid; grid-template-columns: 12px minmax(70px,1fr) auto 55px; align-items: center; gap: 10px; }
+.pending-product-breakdown { margin-top: 10px; padding: 12px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; }
+.pending-product-breakdown > p { margin: 0 0 8px; }
+.pending-product-breakdown .actions { margin: 10px 0; flex-wrap: wrap; }
+.pending-product-breakdown .actions button { font-size: 11px; }
+.pending-color-breakdown { margin: 10px 0; border: 1px solid #e5e7eb; border-radius: 7px; background: white; }
+.pending-color-toggle { width: 100%; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; padding: 10px; text-align: left; }
+.pending-color-toggle small { flex-basis: 100%; }
+.pending-color-content { padding: 10px; }
+.pending-size-breakdown { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+.pending-size-breakdown button { display: flex; flex-direction: column; padding: 8px 4px; gap: 4px; }
+.pending-size-breakdown button strong { color: #c85512; }
+.pending-size-breakdown span,.pending-size-breakdown small { font-size: 11px; }
+.pending-dashboard:has(.pending-product-breakdown) { align-items: start; }
+@media(max-width:750px) { .pending-legend-line { gap: 6px; font-size: 12px; } }
+.pending-product-breakdown { min-width: 0; }
+.pending-color-toggle strong { min-width: 0; overflow-wrap: anywhere; }

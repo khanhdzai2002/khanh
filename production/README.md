@@ -79,3 +79,5 @@ Dự kiến sản xuất có nút **Cập nhật tồn từ Lark → Đối soá
 **Ngay dưới danh sách lệnh**: bảng Chờ sản xuất theo mã–màu–size, search không dấu, bộ lọc, biểu đồ tròn tỷ trọng số còn chờ và cửa sổ lệnh nguồn. Xem [hướng dẫn tra cứu nhanh](docs/PENDING_PRODUCTION.md).
 
 **Đổi trạng thái lệnh hàng loạt** ở danh sách lệnh, có lý do/version/revision; màu ưu tiên Thường xám, Ưu tiên cam, Cấp bách đỏ trên danh sách/trình soạn/chi tiết. Xem [hướng dẫn thao tác](docs/BULK_ORDER_STATUS.md).
+
+Trong chú giải biểu đồ tròn, bấm **mã → màu → size** để xem số lượng và tỷ trọng ngay tại chỗ; bấm size/màu để truy nguồn lệnh rồi mở chi tiết/giao nhận. Mở mục con giữ nguyên bộ lọc dashboard.

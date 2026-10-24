@@ -4,6 +4,7 @@ import ExcelJS from "exceljs";
 import {
   pendingProduction,
   pendingProductionRows,
+  pendingProductBreakdown,
 } from "../shared/pending-production";
 import { type ProductionOrder } from "../shared/domain";
 import { pool, transaction } from "../server/db";
@@ -235,4 +236,46 @@ it("filtered export uses PostgreSQL pending amounts, authenticated Viewer and va
   } finally {
     await new Promise<void>((ok) => server.close(() => ok()));
   }
+});
+
+it("product drilldown conserves colour/size totals with explicit filtered denominators and unique orders", () => {
+  const a = order([
+    item("MIU37", "S", 400, 0, "Xám"),
+    item("MIU37", "M", 800, 0, "Xám"),
+    item("MIU37", "L", 800, 0, "Xám"),
+    item("MIU37", "S", 1200, 0, "Đen"),
+    item("MIU66", "M", 800, 0, "Cam"),
+  ]);
+  const report = pendingProduction([a]);
+  const p = pendingProductBreakdown(report, "MIU37")!;
+  expect(p.pending).toBe(3200);
+  expect(p.share).toBe(80);
+  expect(p.orderCount).toBe(1);
+  const gray = p.colors.find((c) => c.color === "Xám")!;
+  expect(gray.shareOfProduct).toBe(62.5);
+  expect(gray.shareOfReport).toBe(50);
+  expect(gray.sizes.find((s) => s.size === "S")).toMatchObject({
+    pending: 400,
+    shareOfColor: 20,
+    shareOfProduct: 12.5,
+  });
+  expect(p.colors.reduce((n, c) => n + c.shareOfProduct, 0)).toBeCloseTo(100);
+  expect(gray.sizes.reduce((n, s) => n + s.shareOfColor, 0)).toBeCloseTo(100);
+  expect(gray.sizes.reduce((n, s) => n + s.pending, 0)).toBe(gray.pending);
+  expect(pendingProductBreakdown(report, "NOT-FOUND")).toBeNull();
+});
+it("drilldown follows current colour/size filters and never creates missing quantity or NaN shares", () => {
+  const a = order([
+    item("MIU37", "S", 100, 30, "Xám"),
+    item("MIU37", "M", 200, 200, "Xám"),
+    item("MIU37", "L", 300, 0, "Đen"),
+  ]);
+  const report = pendingProduction([a], { color: "Xám", size: "S" });
+  const p = pendingProductBreakdown(report, "MIU37")!;
+  expect(p.pending).toBe(70);
+  expect(p.share).toBe(100);
+  expect(p.colors[0].shareOfProduct).toBe(100);
+  expect(p.colors[0].sizes.find((s) => s.size === "S")?.shareOfColor).toBe(100);
+  expect(p.colors[0].sizes.find((s) => s.size === "M")?.pending).toBe(0);
+  expect(pendingProductBreakdown(pendingProduction([]), "MIU37")).toBeNull();
 });

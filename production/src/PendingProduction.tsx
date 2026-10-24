@@ -4,6 +4,7 @@ import {
   type PendingFilters,
 } from "../shared/pending-production";
 import { sizes, statuses, type ProductionOrder } from "../shared/domain";
+import { PendingProductBreakdown } from "./PendingProductBreakdown";
 import { Field, Notice, Empty, Modal, fmt } from "./ui";
 const palette = [
   "#EE741F",
@@ -25,6 +26,8 @@ export function PendingProduction({
 }) {
   const [filters, setFilters] = useState<Partial<PendingFilters>>({}),
     [expanded, setExpanded] = useState<string[]>([]),
+    [openProducts, setOpenProducts] = useState<string[]>([]),
+    [sourceSize, setSourceSize] = useState(""),
     [limit, setLimit] = useState(100);
   const invalid = !!filters.from && !!filters.to && filters.from > filters.to;
   const result = useMemo(
@@ -35,6 +38,10 @@ export function PendingProduction({
       ),
     [orders, filters, invalid],
   );
+  const openSources = (key: string, size = "") => {
+    setSourceSize(size);
+    setExpanded([key]);
+  };
   const active = orders.filter((o) => !o.deletedAt && !o.cancelled);
   const set = (key: keyof PendingFilters, value: string) => {
     setFilters((f) => ({
@@ -284,23 +291,41 @@ export function PendingProduction({
             </div>
             <div className="pending-legend">
               {result.slices.map((p, i) => (
-                <div key={p.sku}>
-                  <span
-                    className="pending-swatch"
-                    style={{ background: palette[i] }}
-                  />
-                  {p.other ? (
-                    <span>{p.sku}</span>
-                  ) : (
-                    <button
-                      onClick={() => set("sku", p.sku)}
-                      aria-label={`Lọc chờ sản xuất mã ${p.sku}`}
-                    >
-                      {p.sku}
-                    </button>
+                <div key={p.sku} className="pending-legend-entry">
+                  <div className="pending-legend-line">
+                    <span
+                      className="pending-swatch"
+                      style={{ background: palette[i] }}
+                    />
+                    {p.other ? (
+                      <span>{p.sku}</span>
+                    ) : (
+                      <button
+                        onClick={() =>
+                          setOpenProducts((v) =>
+                            v.includes(p.sku)
+                              ? v.filter((s) => s !== p.sku)
+                              : [...v, p.sku],
+                          )
+                        }
+                        aria-expanded={openProducts.includes(p.sku)}
+                        aria-label={`Xem chi tiết chờ sản xuất mã ${p.sku}`}
+                      >
+                        {openProducts.includes(p.sku) ? "▾ " : "▸ "}
+                        {p.sku}
+                      </button>
+                    )}
+                    <strong>{fmt(p.pending)} sp</strong>
+                    <span>{fmt(p.share)}%</span>
+                  </div>
+                  {!p.other && openProducts.includes(p.sku) && (
+                    <PendingProductBreakdown
+                      report={result}
+                      sku={p.sku}
+                      onSources={openSources}
+                      onFilter={() => set("sku", p.sku)}
+                    />
                   )}
-                  <strong>{fmt(p.pending)} sp</strong>
-                  <span>{fmt(p.share)}%</span>
                 </div>
               ))}
               {result.products.length > 8 && (
@@ -309,6 +334,10 @@ export function PendingProduction({
                   Dùng bộ lọc mã để xem từng mã khác.
                 </small>
               )}
+              <small>
+                Bấm mã để mở số lượng/tỷ trọng màu–size ngay tại đây; bấm size
+                để xem các lệnh liên quan.
+              </small>
               <small>
                 Tỷ trọng tính theo số sản phẩm còn chờ, không phải số lệnh. Biểu
                 đồ và bảng dùng cùng bộ lọc.
@@ -364,7 +393,7 @@ export function PendingProduction({
                         <td>
                           <button
                             aria-haspopup="dialog"
-                            onClick={() => setExpanded([r.key])}
+                            onClick={() => openSources(r.key)}
                           >
                             Xem lệnh {r.sku} {r.color}
                           </button>
@@ -402,7 +431,7 @@ export function PendingProduction({
               <Modal
                 key={r.key}
                 wide
-                title={`Lệnh còn chờ: ${r.sku} · ${r.color}`}
+                title={`Lệnh còn chờ: ${r.sku} · ${r.color}${sourceSize ? " · Size " + sourceSize : ""}`}
                 onClose={() => setExpanded([])}
               >
                 <div className="table-scroll">
@@ -412,7 +441,7 @@ export function PendingProduction({
                         <th>Mã lệnh</th>
                         <th>Xưởng</th>
                         <th>Trạng thái nội bộ</th>
-                        {sizes.map((s) => (
+                        {(sourceSize ? [sourceSize] : sizes).map((s) => (
                           <th key={s}>{s}</th>
                         ))}
                         <th>Còn chờ</th>
@@ -420,27 +449,37 @@ export function PendingProduction({
                       </tr>
                     </thead>
                     <tbody>
-                      {r.sources.map((o) => (
-                        <tr key={o.id}>
-                          <td>
-                            <button
-                              onClick={() => {
-                                setExpanded([]);
-                                onOpen(o.id);
-                              }}
-                            >
-                              {o.code}
-                            </button>
-                          </td>
-                          <td>{o.supplier}</td>
-                          <td>{o.status}</td>
-                          {sizes.map((s) => (
-                            <td key={s}>{fmt(o.quantities[s])}</td>
-                          ))}
-                          <td>{fmt(o.pending)}</td>
-                          <td>{o.delivery || "Chưa hẹn"}</td>
-                        </tr>
-                      ))}
+                      {r.sources
+                        .filter(
+                          (o) => !sourceSize || o.quantities[sourceSize] > 0,
+                        )
+                        .map((o) => (
+                          <tr key={o.id}>
+                            <td>
+                              <button
+                                onClick={() => {
+                                  setExpanded([]);
+                                  onOpen(o.id);
+                                }}
+                              >
+                                {o.code}
+                              </button>
+                            </td>
+                            <td>{o.supplier}</td>
+                            <td>{o.status}</td>
+                            {(sourceSize ? [sourceSize] : sizes).map((s) => (
+                              <td key={s}>{fmt(o.quantities[s])}</td>
+                            ))}
+                            <td>
+                              {fmt(
+                                sourceSize
+                                  ? o.quantities[sourceSize]
+                                  : o.pending,
+                              )}
+                            </td>
+                            <td>{o.delivery || "Chưa hẹn"}</td>
+                          </tr>
+                        ))}
                     </tbody>
                   </table>
                 </div>

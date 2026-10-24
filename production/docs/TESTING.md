@@ -5,7 +5,7 @@
 - Node.js 24.19.0, npm 11.9.0, PostgreSQL 17 trong Docker; migrations 001–005.
 - `npm run build`: TypeScript và Vite build thành công. Tailwind biên dịch cục bộ; không cần CDN giao diện V9.
 - `npm ci` theo lockfile chạy lại thành công. Sau cài lại, đã khởi động lại Vite để làm mới dependency optimization (server đang chạy trước đó trả 504 cho cache cũ), rồi xác minh login/logout DEV và API trả 401 sau logout.
-- `npm test`: **189 tests passed, 15 files**, không có test skip. 23 tests domain, 51 tests integration PostgreSQL/HTTP và 18 tests Lark mock/security, 10 tests cấu hình origin/callback, 3 tests lọc log 2 tests SDK/web OAuth với transport giả lập 7 tests bootstrap Administrator và 11 tests quản lý thành viên và 7 tests đọc file/ma trận bán hàng, 18 tests tồn kho Lark Base, 9 tests đối soát hàng đang về và 11 tests báo cáo tỷ trọng sản phẩm và 9 tests danh sách/biểu đồ chờ sản xuất và 10 tests trạng thái hàng loạt/màu ưu tiên.
+- `npm test`: **191 tests passed, 15 files**, không có test skip. 23 tests domain, 51 tests integration PostgreSQL/HTTP và 18 tests Lark mock/security, 10 tests cấu hình origin/callback, 3 tests lọc log 2 tests SDK/web OAuth với transport giả lập 7 tests bootstrap Administrator và 11 tests quản lý thành viên và 7 tests đọc file/ma trận bán hàng, 18 tests tồn kho Lark Base, 9 tests đối soát hàng đang về và 11 tests báo cáo tỷ trọng sản phẩm và 11 tests danh sách/biểu đồ chờ sản xuất và 10 tests trạng thái hàng loạt/màu ưu tiên.
 - Công thức: một test đối chiếu 400 đầu vào với chính hàm calc V9 trích nguyên văn, kiểm tra need/sale/raw/target/cover/flag. Có test riêng ví dụ 60, làm tròn, ngày chờ opt-in, thiếu tồn, bất thường và bốn vòng đời.
 - Giao dịch: nhiều màu/size, nhận 300+450+250 từ 1.000; chặn vượt nhận; idempotency đồng thời; sửa sau nhận, không giảm dưới đã nhận, không đổi SKU/xóa dòng nhận; revision trước/sau; hai người sửa cùng version; xóa/khôi phục; hủy và reopen; giữ mã đã dùng; trigger bất biến.
 - Import: CSV và XLSX thật, preview chưa ghi báo cáo, confirm lặp, replace giữ nguồn cũ, append bỏ trùng và khóa khi thiếu line ID, bỏ ngày xuất chưa đủ, chuyển bán giữ tồn/inbound/vòng đời/test. JSON V9: phát hiện trùng/số nhận lệch, giữ tồn unknown, không seed sales cũ; nhập lệnh đã xóa có 2 biên nhận và nguồn editLog, nhập bản nháp giữ trạng thái.
@@ -159,3 +159,10 @@ Luồng core lệnh/giao nhận đã chạy lại bằng `browser-workflow.py` v
 ## Trạng thái hàng loạt và màu ưu tiên
 
 10 tests `bulk-order-status.test.ts` đạt: batch atomic, giữ item IDs/qty/received/priority/metadata, immutable receipt, version conflict rollback, hủy/xóa/giao đủ, no-op và mixed, concurrent batches, reason/schema/duplicate/max200, quyền DB và HTTP/CSRF, highest priority/tone. Chromium `browser-bulk-order-status.py` đạt desktop/mobile: chọn hợp lệ (giao đủ disabled), lý do bắt buộc, đổi2lệnh thật ở `_test`/revision, cạnh tranh409 không thay lệnh còn lại, màu3mức của chú giải và select đổi ngay, badge chi tiết, không lỗi JS/tràn trang. Không sửa lệnh thật.
+
+
+## Mở rộng mã → màu → size → lệnh từ donut
+
+2tests thêm vào pending-production kiểm tra mẫu số tỷ trọng trong mã/trong màu/trong bộ lọc, số lệnh duy nhất, cộng màu/size bằng tổng và trạng thái dữ liệu0/đã lọc. Browser pending-production mở mã ngay tại chú giải không lọc ngầm, thấy size trong màu mặc định, kiểm tra tỷ trọng, size0disabled, chọn sizeS chỉ có cộtS/nguồn cóS còn chờ, bấm mã lệnh mở chi tiết; Lọc riêng mã vẫn dùng được; desktop/mobile không tràn/lỗi JS.
+
+Fixture HTTP bootstrap Administrator nay đợi đọc xong response tạo session trước khi dùng cookie, tránh đua giữa nhận headers và ghi session PostgreSQL. Không đổi logic xác thực hoặc phân quyền của ứng dụng.

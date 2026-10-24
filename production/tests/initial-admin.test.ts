@@ -123,6 +123,9 @@ it("HTTP chỉ xem danh tính của mình; bootstrap cần phiên, CSRF, đúng 
   const base = `http://127.0.0.1:${(server.address() as any).port}`;
   async function login() {
     const r = await fetch(base + "/synthetic-test-session");
+    // Headers can arrive before express-session finishes persisting the test
+    // session. Consume the completed response before the authenticated request.
+    await r.arrayBuffer();
     return r.headers.get("set-cookie")!.split(";")[0];
   }
   const post = (
