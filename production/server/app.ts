@@ -61,6 +61,7 @@ import {
   pendingProduction,
   pendingProductionRows,
 } from "../shared/pending-production";
+import { bulkOrderStatus } from "./bulk-order-status";
 import { salesFileSchema } from "../shared/sales-file";
 const PgStore = connectPg(session);
 export function makeApp() {
@@ -281,6 +282,11 @@ export function makeApp() {
     res.json({ ok: true });
   });
   app.get("/api/orders", async (_req, res) => res.json(await listOrders()));
+  app.post("/api/orders/bulk-status", permission("order"), async (req, res) =>
+    res.json(
+      await transaction((db) => bulkOrderStatus(db, req.actor!, req.body)),
+    ),
+  );
   app.get("/api/orders/:id", async (req, res) =>
     res.json(await loadOrder(pool, z.uuid().parse(req.params.id))),
   );

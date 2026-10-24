@@ -108,3 +108,7 @@ Thêm báo cáo tỷ trọng theo mã, màu/size, từng lệnh, xưởng/ngày,
 ### Danh sách chờ và tỷ trọng tròn
 
 Thêm ngay dưới danh sách lệnh: cộng phần chưa nhận theo mã–màu–size, bộ lọc/search không dấu, modal đối soát lệnh nguồn, donut tỷ trọng số còn chờ theo mã và CSV/Excel đúng bộ lọc. Chỉ đọc, không thay tồn/giao nhận/dự báo V9. Xem `production/docs/PENDING_PRODUCTION.md`.
+
+### Cập nhật trạng thái nhiều lệnh
+
+Bổ sung chọn nhiều lệnh đổi trạng thái nội bộ, lý do bắt buộc, transaction/version/revision/audit, không sửa dòng hoặc biên nhận. Màu ưu tiên3mức giữ nguyên giá trị V9. Xem `production/docs/BULK_ORDER_STATUS.md`.

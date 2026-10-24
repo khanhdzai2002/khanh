@@ -1712,3 +1712,11 @@ summary {
 .pending-swatch { width: 12px; height: 12px; border-radius: 3px; }
 .pending-production table { min-width: 1080px; }
 @media(max-width:750px) { .pending-dashboard { grid-template-columns: minmax(0,1fr); gap: 16px; } .pending-legend > div { gap: 6px; font-size: 12px; } }
+
+.priority-badge { display: inline-flex; align-items: center; white-space: nowrap; border: 1px solid; border-radius: 6px; padding: 5px 9px; font-size: 12px; font-weight: 750; }
+.priority-normal { color: #475569 !important; background-color: #f1f5f9 !important; border-color: #cbd5e1 !important; }
+.priority-high { color: #9a3412 !important; background-color: #fff7ed !important; border-color: #fdba74 !important; }
+.priority-urgent { color: #b91c1c !important; background-color: #fef2f2 !important; border-color: #fca5a5 !important; }
+.priority-select { font-weight: 750; min-width: 125px; }
+.priority-legend { display: flex; gap: 10px; padding: 12px 20px; align-items: center; flex-wrap: wrap; color: #6b7280; }
+@media print { .priority-badge { print-color-adjust: exact; -webkit-print-color-adjust: exact; } }

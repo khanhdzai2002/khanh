@@ -77,3 +77,5 @@ Dự kiến sản xuất có nút **Cập nhật tồn từ Lark → Đối soá
 **Gối lệnh sản xuất → Báo cáo tỷ trọng sản phẩm**: top mã, tỷ trọng theo đã đặt/còn chờ, ma trận màu–size, cơ cấu từng lệnh, tiến độ/quá hạn, bộ lọc và CSV/Excel. Xem [hướng dẫn báo cáo](docs/PRODUCTION_REPORT.md).
 
 **Ngay dưới danh sách lệnh**: bảng Chờ sản xuất theo mã–màu–size, search không dấu, bộ lọc, biểu đồ tròn tỷ trọng số còn chờ và cửa sổ lệnh nguồn. Xem [hướng dẫn tra cứu nhanh](docs/PENDING_PRODUCTION.md).
+
+**Đổi trạng thái lệnh hàng loạt** ở danh sách lệnh, có lý do/version/revision; màu ưu tiên Thường xám, Ưu tiên cam, Cấp bách đỏ trên danh sách/trình soạn/chi tiết. Xem [hướng dẫn thao tác](docs/BULK_ORDER_STATUS.md).

@@ -37,6 +37,8 @@ import {
 } from "./ui";
 import { PendingProduction } from "./PendingProduction";
 import { ProductionReport } from "./ProductionReport";
+import { BulkOrderStatus } from "./BulkOrderStatus";
+import { PriorityBadge, highestPriority, priorityClass } from "./Priority";
 import type { Snapshot } from "./App";
 export function Orders({
   data,
@@ -56,6 +58,11 @@ export function Orders({
   clearSeed: () => void;
 }) {
   const [reportTab, setReportTab] = useState(false);
+  const [checked, setChecked] = useState<string[]>([]),
+    [bulkOrders, setBulkOrders] = useState<ProductionOrder[] | null>(null);
+  const batchEnabled = page === "orders" && can(actor.role, "order");
+  const eligible = (o: ProductionOrder) =>
+    !o.deletedAt && !o.cancelled && totals(o).pending > 0;
   const [search, setSearch] = useState(""),
     [filter, setFilter] = useState(""),
     [editing, setEditing] = useState<ProductionOrder | "new" | null>(null),
@@ -221,13 +228,89 @@ export function Orders({
             Excel
           </a>
         </div>
+        {batchEnabled && (
+          <div className="bulkbar">
+            <strong>
+              Đã chọn{" "}
+              {
+                checked.filter((id) =>
+                  rows.some((o) => o.id === id && eligible(o)),
+                ).length
+              }{" "}
+              lệnh đang xem
+            </strong>
+            <button
+              disabled={
+                busy ||
+                rows.filter((o) => checked.includes(o.id) && eligible(o))
+                  .length > 200 ||
+                !checked.some((id) =>
+                  rows.some((o) => o.id === id && eligible(o)),
+                )
+              }
+              onClick={() =>
+                setBulkOrders(
+                  rows.filter((o) => checked.includes(o.id) && eligible(o)),
+                )
+              }
+            >
+              Đổi trạng thái hàng loạt
+            </button>
+            <button
+              disabled={busy || !checked.length}
+              onClick={() => setChecked([])}
+            >
+              Bỏ chọn lệnh
+            </button>
+            <small>
+              Tối đa 200 lệnh/lần; chỉ áp dụng lệnh đã chọn trong kết quả đang
+              xem. Lệnh hủy/giao đủ không được chọn.
+            </small>
+          </div>
+        )}
+        <div className="priority-legend">
+          <span>Mức ưu tiên:</span>
+          {priorities.map((p) => (
+            <PriorityBadge key={p} value={p} />
+          ))}
+        </div>
         {rows.length ? (
           <div className="table-scroll">
             <table>
               <thead>
                 <tr>
+                  {batchEnabled && (
+                    <th>
+                      <input
+                        type="checkbox"
+                        aria-label="Chọn các lệnh hợp lệ đang xem"
+                        disabled={busy || !rows.some(eligible)}
+                        checked={
+                          rows.some(eligible) &&
+                          rows
+                            .filter(eligible)
+                            .every((o) => checked.includes(o.id))
+                        }
+                        onChange={(e) =>
+                          setChecked(
+                            e.target.checked
+                              ? [
+                                  ...new Set([
+                                    ...checked,
+                                    ...rows.filter(eligible).map((o) => o.id),
+                                  ]),
+                                ]
+                              : checked.filter(
+                                  (id) => !rows.some((o) => o.id === id),
+                                ),
+                          )
+                        }
+                      />
+                    </th>
+                  )}
                   {[
                     "Mã lệnh",
+                    "Ưu tiên",
                     "Ngày lập",
                     "Nhà xưởng",
                     "Hẹn giao",
@@ -235,7 +318,8 @@ export function Orders({
                     "Đã nhận",
                     "Còn chờ",
                     "Tiến độ",
-                    "Trạng thái",
+                    "Trạng thái giao hàng",
+                    "Trạng thái nội bộ",
                     archived ? "Lý do xóa" : "Người đặt",
                     "Thao tác",
                   ].map((s) => (
@@ -248,7 +332,27 @@ export function Orders({
                   const t = totals(o);
                   return (
                     <tr key={o.id}>
+                      {batchEnabled && (
+                        <td>
+                          <input
+                            type="checkbox"
+                            aria-label={`Chọn lệnh ${o.code}`}
+                            checked={checked.includes(o.id) && eligible(o)}
+                            disabled={busy || !eligible(o)}
+                            onChange={(e) =>
+                              setChecked(
+                                e.target.checked
+                                  ? [...new Set([...checked, o.id])]
+                                  : checked.filter((id) => id !== o.id),
+                              )
+                            }
+                          />
+                        </td>
+                      )}
                       <td className="product-code">{o.code}</td>
+                      <td title="Mức ưu tiên cao nhất trong các dòng của lệnh">
+                        <PriorityBadge value={highestPriority(o.items)} />
+                      </td>
                       <td>{vnDate(o.time)}</td>
                       <td>{o.supplier}</td>
                       <td>{o.delivery || "Chưa hẹn"}</td>
@@ -274,6 +378,8 @@ export function Orders({
                           {t.status}
                         </span>
                       </td>
+                      <td>{o.status}</td>
+
                       <td className="color-cell">
                         {archived ? (
                           <>
@@ -352,6 +458,18 @@ export function Orders({
         Trạng thái “Đã gửi xưởng” là thông tin nội bộ. Ứng dụng chưa gửi email
         hoặc tin nhắn tới xưởng. Xóa mềm khác với hủy phần còn chờ.
       </Notice>
+      {bulkOrders && (
+        <BulkOrderStatus
+          orders={bulkOrders}
+          busy={busy}
+          run={run}
+          onClose={() => setBulkOrders(null)}
+          onSaved={() => {
+            setBulkOrders(null);
+            setChecked([]);
+          }}
+        />
+      )}
       {editing && (
         <OrderEditor
           key={editing === "new" ? "new" : editing.id}
@@ -825,6 +943,7 @@ function OrderEditor({
                   </td>
                   <td>
                     <select
+                      className={`priority-select ${priorityClass(highestPriority(g.items))}`}
                       aria-label={"Ưu tiên " + g.sku + " " + g.color}
                       disabled={busy || (!!order?.cancelled && !reopen)}
                       value={
@@ -846,7 +965,9 @@ function OrderEditor({
                       }
                     >
                       {priorities.map((p) => (
-                        <option key={p}>{p}</option>
+                        <option className={priorityClass(p)} key={p}>
+                          {p}
+                        </option>
                       ))}
                     </select>
                   </td>
@@ -969,13 +1090,16 @@ function OrderEditor({
               )}
               <Field label="Ưu tiên">
                 <select
+                  className={`priority-select ${priorityClass(priority)}`}
                   value={priority}
                   onChange={(e) =>
                     setPriority(e.target.value as typeof priority)
                   }
                 >
                   {priorities.map((p) => (
-                    <option key={p}>{p}</option>
+                    <option className={priorityClass(p)} key={p}>
+                      {p}
+                    </option>
                   ))}
                 </select>
               </Field>
@@ -1264,6 +1388,7 @@ function OrderDetail({
                   "Mã SP",
                   "Màu",
                   "Size",
+                  "Ưu tiên",
                   "SL đặt",
                   "Đã nhận",
                   "Còn chờ",
@@ -1279,6 +1404,9 @@ function OrderDetail({
                   <td className="product-code">{i.sku}</td>
                   <td className="color-cell">{i.color}</td>
                   <td>{i.size}</td>
+                  <td>
+                    <PriorityBadge value={i.priority} />
+                  </td>
                   <td>{fmt(i.qty)}</td>
                   <td>{fmt(i.received)}</td>
                   <td>{fmt(order.cancelled ? 0 : i.qty - i.received)}</td>
