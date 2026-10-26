@@ -33,6 +33,7 @@ import { Planning } from "./Planning";
 import { Orders } from "./Orders";
 import { Sales } from "./Sales";
 import { SettingsPage } from "./Settings";
+import { IncomingGoods } from "./IncomingGoods";
 import { AccountsPage } from "./Accounts";
 export type Snapshot = {
   skus: Variant[];
@@ -44,6 +45,7 @@ const pages = [
   { id: "dashboard", name: "Tổng quan", icon: LayoutDashboard },
   { id: "planning", name: "Dự kiến sản xuất", icon: ClipboardList },
   { id: "orders", name: "Gối lệnh sản xuất", icon: Factory },
+  { id: "incoming", name: "Nhập liệu hàng về", icon: PackageCheck },
   { id: "history", name: "Lịch sử & giao nhận", icon: History },
   { id: "sales", name: "Phân tích bán hàng", icon: ChartNoAxesCombined },
   { id: "archived", name: "Lệnh đã xóa", icon: Trash2 },
@@ -95,6 +97,7 @@ export default function App() {
     [busy, setBusy] = useState(false),
     [selected, setSelected] = useState<string[]>([]),
     [draftFrom, setDraftFrom] = useState<Variant[]>([]),
+    [openOrderId, setOpenOrderId] = useState<string | null>(null),
     [development, setDevelopment] = useState(false);
   const refresh = useCallback(async () => {
     const [snapshot, orders] = await Promise.all([
@@ -391,6 +394,19 @@ export default function App() {
                 busy={busy}
                 seed={draftFrom}
                 clearSeed={() => setDraftFrom([])}
+                openOrderId={openOrderId}
+                clearOpenOrder={() => setOpenOrderId(null)}
+              />
+            )}
+            {page === "incoming" && (
+              <IncomingGoods
+                data={data}
+                role={user.role}
+                run={run}
+                onOrder={(id) => {
+                  setOpenOrderId(id);
+                  navigate("history");
+                }}
               />
             )}
             {page === "sales" && (

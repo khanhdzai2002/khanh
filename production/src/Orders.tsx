@@ -49,6 +49,8 @@ export function Orders({
   busy,
   seed,
   clearSeed,
+  openOrderId,
+  clearOpenOrder,
 }: {
   data: Snapshot;
   page: string;
@@ -57,6 +59,8 @@ export function Orders({
   busy: boolean;
   seed: Variant[];
   clearSeed: () => void;
+  openOrderId?: string | null;
+  clearOpenOrder?: () => void;
 }) {
   const [reportTab, setReportTab] = useState(false);
   const [checked, setChecked] = useState<string[]>([]),
@@ -74,6 +78,12 @@ export function Orders({
     label: string;
     returnToDetail: boolean;
   } | null>(null);
+  useEffect(() => {
+    if (openOrderId) {
+      setSelected(openOrderId);
+      clearOpenOrder?.();
+    }
+  }, [openOrderId]);
   const archived = page === "archived";
   useEffect(() => {
     if (seed.length && page === "orders") setEditing("new");
@@ -1547,6 +1557,22 @@ function OrderDetail({
         </div>
       ) : (
         history && <p className="muted">Chưa ghi nhận đợt giao nào.</p>
+      )}
+      {!!history?.sources?.length && (
+        <section className="no-print">
+          <h3>Phiếu kiểm kho đính kèm</h3>
+          {history.sources.map((i: any) => (
+            <p key={i.id}>
+              <a
+                href={`/api/orders/${order.id}/incoming-images/${i.id}`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {i.name} · Mở ảnh gốc
+              </a>
+            </p>
+          ))}
+        </section>
       )}
       <h3>Nhật ký chỉnh sửa</h3>
       {history?.revisions.map((r: any) => (

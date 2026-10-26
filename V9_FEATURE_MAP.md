@@ -124,3 +124,7 @@ Theo yêu cầu mới, vận hành chỉS/M/L/XL; loại XS/2XL khỏi tạo SKU
 ## Thay đổi được người dùng yêu cầu: giao dư thành phẩm
 
 Giới hạn V9 nhận không vượt còn chờ được thay bằng [chính sách giao nhận thực tế](production/docs/OVER_RECEIPTS.md): cho nhận vượt, tiến độ trên 100%, thiếu/dư theo từng SKU, giữ số đặt gốc và biên nhận bất biến.
+
+## Bổ sung: Nhập liệu hàng về
+
+[Nhập liệu hàng về](production/docs/INCOMING_GOODS.md): ảnh phiếu → OCR có đồng ý → ánh xạ màu theo mã → kiểm tra size/số lượng → phân bổ nhiều lệnh → xác nhận transaction, lưu ảnh chứng từ, quy ước màu và chống ghi trùng. Đây là tính năng mới theo yêu cầu, dùng lại cơ chế nhận hàng và giao dư hiện hành; không thay công thức dự báo.

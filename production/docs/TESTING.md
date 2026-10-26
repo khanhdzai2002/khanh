@@ -177,3 +177,13 @@ Fixture HTTP bootstrap Administrator nay đợi đọc xong response tạo sessi
 201 tests đạt. Test mới xác minh nhận 15 rồi 2 từ số đặt 10 (170%), sửa metadata giữ số đặt 10, giao dư một SKU không bù thiếu SKU khác dù tổng trên 100%, chặn dòng không thuộc lệnh và số âm. Chromium kiểm tra nhận qua UI, cột giao dư, 125%/130%, nhận thêm sau đủ, xuất CSV, sửa metadata và mobile. Chỉ dùng dữ liệu tổng hợp trên database `_test`; chưa xác minh deploy Railway thực tế.
 
 Luồng Chromium V9 đầy đủ cũng đạt: danh mục trống → lệnh nhiều màu/size → lưu → kiểm tra dữ liệu đầu vào → hai đợt nhận → sửa/thêm màu → file/in → hủy/khôi phục → xóa mềm/khôi phục → dự báo → mobile.
+
+## Nhập liệu hàng về — migration 009
+
+216 tests / 17 files đạt. 15 tests mới kiểm tra màu tiếng Việt theo từng mã, không đoán khi nhiều màu phù hợp; ảnh nháp lưu DB không gửi ngoài; magic bytes/giới hạn/trùng ảnh; version nháp; nhận vượt, retry đồng thời chỉ một biên nhận; ảnh đã xác nhận không nhập lại; chia SKU qua nhiều lệnh/gộp nhiều bao; xung đột rollback toàn bộ; null/âm/size đã ngừng/mã sai/dòng lệnh sai; quy ước màu không bị ghi đè; quyền/CSRF/chủ phiếu; OCR chưa cấu hình, payload endpoint cố định, giữ null, JSON lỗi/truncated/provider lỗi không ghi dữ liệu; ảnh chứng từ chỉ đọc từ lệnh liên quan.
+
+Chromium `browser-incoming-goods.py` với `serve-incoming-smoke.ts` dùng provider mô phỏng trong backend và ảnh PNG tổng hợp: upload/đồng ý/đọc → chặn tự chọn màu mơ hồ hoặc lệnh khi có hai lệnh → sửa null → tách SKU sang ba lệnh → lưu/mở lại nháp → xác nhận155 sản phẩm → quy ước theo mã áp dụng phiếu sau → ảnh và liên kết mở đúng lệnh → nhập bảng thủ công → mobile không tràn trang. Luồng không gọi OpenAI thật, không dùng ảnh hay dữ liệu công ty. Model trả một lượng tổng hợp cố định chỉ trong runner test; production không có chế độ giả kết quả nhận dạng.
+
+Cần API key thật và sự đồng ý dùng nhà cung cấp để kiểm tra OCR thực tế; chưa xác minh độ chính xác chữ viết tay/hosting Railway với công ty. Không tuyên bố OCR live đã hoàn tất.
+
+Chạy bổ sung: `browser-incoming-manual.py` xác minh backend không có OCR key vẫn nhập Đen theo danh mục, chọn đúng lệnh duy nhất và ghi nhận125 từ số đặt100. Luồng Chromium V9 tạo/sửa/nhận/hủy/khôi phục/xóa mềm và mobile cũng đạt sau khi thêm module.

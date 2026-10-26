@@ -65,6 +65,7 @@ import {
 } from "../shared/pending-production";
 import { bulkOrderStatus } from "./bulk-order-status";
 import { salesFileSchema } from "../shared/sales-file";
+import { incomingRouter } from "./incoming-goods";
 const PgStore = connectPg(session);
 export function makeApp() {
   const app = express(),
@@ -150,6 +151,7 @@ export function makeApp() {
         process.env.NODE_ENV !== "production",
     }),
   );
+  app.use("/api/incoming", incomingRouter);
   app.get("/api/dashboard", async (_req, res) => res.json(await dashboard()));
   app.get("/api/account", async (req, res) => {
     res.json(await initialAdminStatus(pool, req.actor!.id));
@@ -351,6 +353,21 @@ export function makeApp() {
           ),
         ),
     );
+  app.get("/api/orders/:id/incoming-images/:imageId", async (req, res) => {
+    const id = z.uuid().parse(req.params.id);
+    await loadOrder(pool, id);
+    const image = (
+      await pool.query(
+        `SELECT i.mime,i.bytes FROM incoming_goods_images i JOIN incoming_goods_drafts d ON d.id=i.draft_id WHERE i.id=$2 AND d.state='confirmed' AND EXISTS (SELECT 1 FROM jsonb_array_elements(d.result->'receipts') r WHERE r->>'orderId'=$1)`,
+        [id, z.uuid().parse(req.params.imageId)],
+      )
+    ).rows[0];
+    if (!image) throw new AppError(404, "Ảnh không thuộc biên nhận của lệnh");
+    res
+      .set("Content-Type", image.mime)
+      .set("X-Content-Type-Options", "nosniff")
+      .send(image.bytes);
+  });
   app.get("/api/orders/:id/history", async (req, res) => {
     const id = z.uuid().parse(req.params.id);
     await loadOrder(pool, id);
@@ -372,7 +389,13 @@ export function makeApp() {
         [id],
       )
     ).rows;
-    res.json({ receipts, revisions, activity });
+    const sources = (
+      await pool.query(
+        `SELECT i.id,i.name FROM incoming_goods_images i JOIN incoming_goods_drafts d ON d.id=i.draft_id WHERE d.state='confirmed' AND EXISTS (SELECT 1 FROM jsonb_array_elements(d.result->'receipts') r WHERE r->>'orderId'=$1) ORDER BY i.name,i.id`,
+        [id],
+      )
+    ).rows;
+    res.json({ receipts, revisions, activity, sources });
   });
   app.get("/api/sales", async (req, res) => {
     const { from, to } = z
