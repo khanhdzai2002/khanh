@@ -185,16 +185,25 @@ export type ProductionOrder = {
 export function totals(order: ProductionOrder) {
   const placed = order.items.reduce((n, i) => n + i.qty, 0),
     received = order.items.reduce((n, i) => n + i.received, 0),
-    pending = order.cancelled ? 0 : placed - received;
+    pending = order.cancelled
+      ? 0
+      : order.items.reduce((n, i) => n + Math.max(0, i.qty - i.received), 0),
+    excess = order.items.reduce(
+      (n, i) => n + Math.max(0, i.received - i.qty),
+      0,
+    );
   return {
     placed,
     received,
     pending,
+    excess,
     percent: placed ? (received / placed) * 100 : 0,
     status: order.cancelled
       ? "Đã hủy phần còn lại"
-      : received === placed
-        ? "Đã giao đủ"
+      : pending === 0
+        ? excess > 0
+          ? "Đã giao vượt"
+          : "Đã giao đủ"
         : received > 0
           ? "Đã giao một phần"
           : order.status,

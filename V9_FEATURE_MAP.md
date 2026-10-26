@@ -120,3 +120,7 @@ Mở rộng mã ngay tại chú giải thành màu/size với số còn chờ, %
 ### Chính sách size mới thay đặc tả6size
 
 Theo yêu cầu mới, vận hành chỉS/M/L/XL; loại XS/2XL khỏi tạo SKU/lệnh/dự báo/bán hàng/tồnLark/báo cáo. Giữ chứng từ lịch sử, không xóa hay đổi số đã nhận. Backend và migration007 chặn thêm/tăng sản xuất size đã ngừng. Xem `production/docs/ACTIVE_SIZES.md`.
+
+## Thay đổi được người dùng yêu cầu: giao dư thành phẩm
+
+Giới hạn V9 nhận không vượt còn chờ được thay bằng [chính sách giao nhận thực tế](production/docs/OVER_RECEIPTS.md): cho nhận vượt, tiến độ trên 100%, thiếu/dư theo từng SKU, giữ số đặt gốc và biên nhận bất biến.

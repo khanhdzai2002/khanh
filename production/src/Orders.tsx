@@ -213,7 +213,7 @@ export function Orders({
           >
             <option value="">Tất cả trạng thái</option>
             <option value="pending">Chưa giao đủ</option>
-            <option value="done">Đã giao đủ</option>
+            <option value="done">Đã giao đủ / vượt</option>
             <option value="cancelled">Đã hủy phần còn lại</option>
           </select>
           <span className="spacer" />
@@ -380,7 +380,9 @@ export function Orders({
                       </td>
                       <td>
                         <div className="progress">
-                          <i style={{ width: t.percent + "%" }} />
+                          <i
+                            style={{ width: Math.min(100, t.percent) + "%" }}
+                          />
                         </div>
                         <small>{fmt(t.percent)}%</small>
                       </td>
@@ -671,7 +673,10 @@ function OrderEditor({
   const patch = (key: keyof OrderInput, value: unknown) =>
     setForm({ ...form, [key]: value });
   const locked = (item: OrderInput["items"][number]) =>
-    order?.items.find((i) => i.id === item.id)?.received || 0;
+    Math.min(
+      order?.items.find((i) => i.id === item.id)?.received || 0,
+      order?.items.find((i) => i.id === item.id)?.qty || 0,
+    );
   const add = () => {
     setValidation("");
     const sku = manual ? newCode.trim().toUpperCase() : code;
@@ -1300,13 +1305,12 @@ function OrderDetail({
         ([id, q]) =>
           !Number.isInteger(q) ||
           q < 0 ||
-          q >
-            (order.items.find((i) => i.id === id)?.qty || 0) -
-              (order.items.find((i) => i.id === id)?.received || 0),
+          q > 1000000 ||
+          !order.items.some((i) => i.id === id),
       )
     ) {
       setReceiptError(
-        "Số nhận phải là số nguyên không âm và không vượt số còn chờ của từng SKU.",
+        "Số nhận phải là số nguyên từ 0 đến 1.000.000 cho từng SKU trong đợt giao. Cho phép giao vượt số đặt.",
       );
       return;
     }
@@ -1362,7 +1366,7 @@ function OrderDetail({
               {fmt(t.received)} / {fmt(t.placed)} sản phẩm
             </p>
             <div className="progress">
-              <i style={{ width: t.percent + "%" }} />
+              <i style={{ width: Math.min(100, t.percent) + "%" }} />
             </div>
           </div>
         </div>
@@ -1421,6 +1425,7 @@ function OrderDetail({
                   "SL đặt",
                   "Đã nhận",
                   "Còn chờ",
+                  "Giao dư",
                   "Nhận đợt này",
                 ].map((s) => (
                   <th key={s}>{s}</th>
@@ -1438,12 +1443,14 @@ function OrderDetail({
                   </td>
                   <td>{fmt(i.qty)}</td>
                   <td>{fmt(i.received)}</td>
-                  <td>{fmt(order.cancelled ? 0 : i.qty - i.received)}</td>
+                  <td>
+                    {fmt(order.cancelled ? 0 : Math.max(0, i.qty - i.received))}
+                  </td>
+                  <td>{fmt(Math.max(0, i.received - i.qty))}</td>
                   <td>
                     {!archived &&
                     !order.cancelled &&
-                    can(actor.role, "receive") &&
-                    i.qty > i.received ? (
+                    can(actor.role, "receive") ? (
                       <input
                         className="number-input"
                         type="number"
@@ -1451,7 +1458,7 @@ function OrderDetail({
                           "Nhận " + i.sku + " " + i.color + " " + i.size
                         }
                         min="0"
-                        max={i.qty - i.received}
+                        max={1000000}
                         step="1"
                         disabled={busy}
                         value={qty[i.id] || 0}
@@ -1474,39 +1481,37 @@ function OrderDetail({
           {receiptError}
         </div>
       )}
-      {!archived &&
-        can(actor.role, "receive") &&
-        !order.cancelled &&
-        t.pending > 0 && (
-          <div className="receipt-form no-print">
-            <Field label="Ngày nhận hàng">
-              <input
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-              />
-            </Field>
-            <Field label="Ghi chú đợt giao">
-              <input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Giao đợt 1, thiếu size M…"
-              />
-            </Field>
-            <button
-              className="primary"
-              disabled={busy}
-              onClick={() => void receive()}
-            >
-              <PackagePlus size={16} />
-              Ghi nhận hàng giao
-            </button>
-          </div>
-        )}
+      {!archived && can(actor.role, "receive") && !order.cancelled && (
+        <div className="receipt-form no-print">
+          <Field label="Ngày nhận hàng">
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+            />
+          </Field>
+          <Field label="Ghi chú đợt giao">
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Giao đợt 1, thiếu size M…"
+            />
+          </Field>
+          <button
+            className="primary"
+            disabled={busy}
+            onClick={() => void receive()}
+          >
+            <PackagePlus size={16} />
+            Ghi nhận hàng giao
+          </button>
+        </div>
+      )}
       <Notice>
         Đã đặt {fmt(t.placed)} · Đã nhận {fmt(t.received)} · Còn chờ{" "}
-        {fmt(t.pending)}. Biên nhận cũ bất biến. Ghi nhận hàng không tự cập nhật
-        tồn kho.
+        {fmt(t.pending)} · Giao dư {fmt(t.excess)}. Cho phép nhận vượt số đặt;
+        tiến độ có thể vượt 100%. Thiếu hàng được tính riêng từng SKU. Biên nhận
+        cũ bất biến. Ghi nhận hàng không tự cập nhật tồn kho.
       </Notice>
       <h3>Lịch sử các đợt giao</h3>
       {historyError && <Notice>{historyError}</Notice>}

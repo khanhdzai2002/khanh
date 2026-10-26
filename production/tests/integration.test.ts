@@ -150,7 +150,7 @@ describe("PostgreSQL — giao dịch lệnh và biên nhận", () => {
         (await pool.query("SELECT count(*) AS n FROM schema_migrations"))
           .rows[0].n,
       ),
-    ).toBe(7);
+    ).toBe(8);
   });
   it("tạo lệnh nhiều màu nhiều size, không tự chuyển Nháp thành đã gửi", async () => {
     const ids: string[] = [];
@@ -206,13 +206,92 @@ describe("PostgreSQL — giao dịch lệnh và biên nhận", () => {
     expect(sku.stock).toBe(30);
     expect(sku.inbound).toBe(10);
   });
-  it("chặn nhận vượt còn chờ và rollback không tạo biên nhận", async () => {
-    const o = await order(10);
-    await expect(receipt(o, 11)).rejects.toThrow("vượt");
+  it("cho nhận vượt số đặt, nhận thêm sau đủ hàng, giữ tồn và số đặt gốc", async () => {
+    let o = await order(10);
+    await receipt(o, 15);
+    o = await loadOrder(pool, o.id);
+    expect(totals(o)).toMatchObject({
+      placed: 10,
+      received: 15,
+      pending: 0,
+      excess: 5,
+      percent: 150,
+      status: "Đã giao vượt",
+    });
+    await receipt(o, 2);
+    o = await loadOrder(pool, o.id);
+    expect(totals(o)).toMatchObject({
+      placed: 10,
+      received: 17,
+      pending: 0,
+      excess: 7,
+      percent: 170,
+    });
+    const body = input(o);
+    body.notes = "Sửa ghi chú sau khi giao dư";
+    await tx((db) =>
+      editOrder(db, actor, o.id, {
+        order: body,
+        expectedVersion: o.version,
+        reason: "Đối soát giao dư",
+      }),
+    );
+    expect((await loadOrder(pool, o.id)).items[0]).toMatchObject({
+      qty: 10,
+      received: 17,
+    });
     expect(
       (await pool.query("SELECT * FROM production_receipts")).rowCount,
-    ).toBe(0);
-    expect((await loadOrder(pool, o.id)).items[0].received).toBe(0);
+    ).toBe(2);
+    expect((await variants())[0]).toMatchObject({ stock: 30, inbound: 10 });
+  });
+  it("giao dư một SKU không bù số còn thiếu SKU khác dù tổng vượt 100%", async () => {
+    let o = await order(10);
+    const other = await tx((db) =>
+      saveSku(
+        db,
+        actor,
+        skuSchema.parse({ sku: "OTHER", color: "Cam", size: "S", stock: 0 }),
+      ),
+    );
+    o = await tx((db) =>
+      editOrder(db, actor, o.id, {
+        order: {
+          ...input(o),
+          items: [
+            ...input(o).items,
+            { variantId: other, qty: 10, priority: "THƯỜNG" },
+          ],
+        },
+        expectedVersion: o.version,
+        reason: "Thêm SKU thử nghiệm",
+      }),
+    );
+    await receipt(o, 30);
+    o = await loadOrder(pool, o.id);
+    expect(totals(o)).toMatchObject({
+      placed: 20,
+      received: 30,
+      pending: 10,
+      excess: 20,
+      percent: 150,
+      status: "Đã giao một phần",
+    });
+    await expect(
+      tx((db) =>
+        receive(db, actor, o.id, randomUUID(), {
+          expectedVersion: o.version,
+          date: "2026-10-17",
+          note: "",
+          lines: [{ itemId: randomUUID(), qty: 1 }],
+        }),
+      ),
+    ).rejects.toThrow("không thuộc lệnh");
+    await expect(
+      pool.query("UPDATE production_order_items SET received=-1 WHERE id=$1", [
+        o.items[0].id,
+      ]),
+    ).rejects.toThrow();
   });
   it("gửi lặp đồng thời cùng khóa chỉ ghi một lần", async () => {
     const o = await order();

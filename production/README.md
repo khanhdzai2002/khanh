@@ -83,3 +83,5 @@ Dự kiến sản xuất có nút **Cập nhật tồn từ Lark → Đối soá
 Trong chú giải biểu đồ tròn, bấm **mã → màu → size** để xem số lượng và tỷ trọng ngay tại chỗ; bấm size/màu để truy nguồn lệnh rồi mở chi tiết/giao nhận. Mở mục con giữ nguyên bộ lọc dashboard.
 
 **Chính sách size mới:** toàn bộ vận hành chỉ dùng **S/M/L/XL**; chặn tạo/gối size đã ngừng ở backend và DB, giữ chứng từ cũ để đối soát. Xem [phạm vi thay đổi và lịch sử](docs/ACTIVE_SIZES.md).
+
+Quy trình giao dư do cắt tròn cây vải: xem [Giao nhận thực tế](docs/OVER_RECEIPTS.md). Cho nhận vượt số đặt và hiển thị tiến độ trên 100%; thiếu/dư đối soát riêng từng SKU.

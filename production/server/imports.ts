@@ -528,7 +528,7 @@ export async function previewV9(db: DB, actor: Actor, raw: unknown) {
             i.qty > 1e6 ||
             !Number.isInteger(i.received) ||
             i.received < 0 ||
-            i.received > i.qty
+            i.received > 2147483647
           )
             throw Error("Số đặt/nhận không hợp lệ");
           const key = JSON.stringify([

@@ -743,6 +743,7 @@ export function makeApp() {
           "SL đặt",
           "Đã nhận",
           "Còn chờ",
+          "Giao dư",
           "Ưu tiên",
           "Người đặt",
           "Trạng thái",
@@ -761,7 +762,8 @@ export function makeApp() {
               i.size,
               i.qty,
               i.received,
-              o.cancelled ? 0 : i.qty - i.received,
+              o.cancelled ? 0 : Math.max(0, i.qty - i.received),
+              Math.max(0, i.received - i.qty),
               i.priority,
               o.requestedBy,
               totals(o).status,
@@ -784,6 +786,10 @@ export function makeApp() {
             "Người đặt",
             "Trạng thái",
             "Ghi chú",
+            "Đã nhận",
+            "Còn chờ",
+            "Giao dư",
+            "Tiến độ (%)",
           ],
         ];
         for (const order of all) {
@@ -817,6 +823,16 @@ export function makeApp() {
               order.requestedBy,
               totals(order).status,
               order.notes,
+              items.reduce((n, i) => n + i.received, 0),
+              order.cancelled
+                ? 0
+                : items.reduce(
+                    (n, i) => n + Math.max(0, i.qty - i.received),
+                    0,
+                  ),
+              items.reduce((n, i) => n + Math.max(0, i.received - i.qty), 0),
+              (100 * items.reduce((n, i) => n + i.received, 0)) /
+                items.reduce((n, i) => n + i.qty, 0),
             ]);
           }
         }

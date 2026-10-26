@@ -45,9 +45,9 @@ with sync_playwright() as p:
     row.get_by_role('button',name='Chi tiết',exact=True).click()
     d=page.get_by_role('dialog')
     receive=d.get_by_label('Nhận SYNTHETIC-UI Cam S',exact=True)
-    receive.fill('1000')
+    receive.fill('1000001')
     d.get_by_role('button',name='Ghi nhận hàng giao',exact=True).click()
-    expect(d.get_by_role('alert')).to_contain_text('không vượt số còn chờ')
+    expect(d.get_by_role('alert')).to_contain_text('Số nhận phải là số nguyên')
     for qty in ['3','2']:
         receive.fill(qty)
         with page.expect_response(lambda r:r.request.method=='POST' and '/receipts' in r.url) as received:
@@ -156,5 +156,5 @@ with sync_playwright() as p:
     assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     d.get_by_role('button',name='Đóng, không lưu',exact=True).click()
     assert not errors, errors
-    print('PASS V9 core browser workflow: empty catalogue -> manual multi-colour order -> new matrix size -> save -> over-receipt blocked -> 2 receipts -> edit/add colour -> files/print -> cancel/reopen -> archive/restore -> inline validation and persistence -> planning selection -> mobile. Synthetic data only.')
+    print('PASS V9 core browser workflow: empty catalogue -> manual multi-colour order -> new matrix size -> save -> invalid receipt quantity blocked -> 2 receipts -> edit/add colour -> files/print -> cancel/reopen -> archive/restore -> inline validation and persistence -> planning selection -> mobile. Synthetic data only.')
     browser.close()

@@ -319,11 +319,12 @@ export async function editOrder(
     if (
       old &&
       old.received > 0 &&
-      (item.variantId !== old.variantId || item.qty < old.received)
+      (item.variantId !== old.variantId ||
+        item.qty < Math.min(old.qty, old.received))
     )
       throw new AppError(
         409,
-        "Dòng đã nhận bị khóa SKU; số đặt không được nhỏ hơn đã nhận.",
+        "Dòng đã nhận bị khóa SKU; không giảm số đặt dưới mức đã nhận hoặc mức đặt gốc nếu đã giao dư.",
       );
   }
   for (const old of before.items)
@@ -501,11 +502,7 @@ export async function receive(
     throw new AppError(400, "Trùng dòng nhận hàng");
   for (const l of input.lines) {
     const item = before.items.find((i) => i.id === l.itemId);
-    if (!item || l.qty > item.qty - item.received)
-      throw new AppError(
-        409,
-        "Số nhận vượt số còn chờ hoặc dòng không thuộc lệnh",
-      );
+    if (!item) throw new AppError(409, "Dòng nhận hàng không thuộc lệnh");
   }
   const rid = randomUUID(),
     result = {
