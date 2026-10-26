@@ -187,3 +187,11 @@ Chromium `browser-incoming-goods.py` với `serve-incoming-smoke.ts` dùng provi
 Cần API key thật và sự đồng ý dùng nhà cung cấp để kiểm tra OCR thực tế; chưa xác minh độ chính xác chữ viết tay/hosting Railway với công ty. Không tuyên bố OCR live đã hoàn tất.
 
 Chạy bổ sung: `browser-incoming-manual.py` xác minh backend không có OCR key vẫn nhập Đen theo danh mục, chọn đúng lệnh duy nhất và ghi nhận125 từ số đặt100. Luồng Chromium V9 tạo/sửa/nhận/hủy/khôi phục/xóa mềm và mobile cũng đạt sau khi thêm module.
+
+## Nhà cung cấp OCR Gemini
+
+226 tests /18 files đạt. 10 tests Gemini mới kiểm tra chọn nhà cung cấp/tự nhận khóa khi chỉ có Gemini, giữ tương thích OpenAI, không dùng nhầm khóa/model, chặn model URL, payload inlineData/API key qua header/JSON MIME, giữ null, bỏ thought text, chặn safety/truncated/JSON lỗi, HTTP429 và lỗi mạng không retry/failover. Test route bổ sung chặn client cũ đã đồng ý OpenAI khi backend chuyển sang Gemini trước khi gọi mạng.
+
+Chromium luồng phiếu đầy đủ đã đạt với `INCOMING_SMOKE_PROVIDER=gemini` và `INCOMING_EXPECT_PROVIDER=gemini`: tên Google Gemini ở ô đồng ý, upload → nhận dạng qua backend mô phỏng Google → kiểm tra/ánh xạ → chia3 lệnh → lưu/mở lại nháp → nhận155 → ảnh chứng từ/liên kết lệnh → áp dụng quy ước cho phiếu tiếp → mobile. Không dùng API key thật, không gửi ảnh công ty, chưa xác minh OCR hoặc hạn mức Gemini live.
+
+Đã chạy lại cùng luồng Chromium với `INCOMING_SMOKE_PROVIDER=openai`; luồng tương thích OpenAI cũng đạt sau thay đổi provider/consent.

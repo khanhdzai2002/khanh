@@ -48,11 +48,17 @@ beforeEach(async () => {
   );
   delete process.env.INCOMING_OCR_API_KEY;
   delete process.env.INCOMING_OCR_MODEL;
+  delete process.env.INCOMING_OCR_PROVIDER;
+  delete process.env.GEMINI_API_KEY;
+  delete process.env.GEMINI_MODEL;
 });
 afterEach(() => {
   vi.unstubAllGlobals();
   delete process.env.INCOMING_OCR_API_KEY;
   delete process.env.INCOMING_OCR_MODEL;
+  delete process.env.INCOMING_OCR_PROVIDER;
+  delete process.env.GEMINI_API_KEY;
+  delete process.env.GEMINI_MODEL;
 });
 afterAll(async () => {
   await pool.end();
@@ -506,6 +512,13 @@ it("HTTP: auth, CSRF, role, source image ownership, OCR consent and saved extrac
         })
       ).status,
     ).toBe(400);
+    process.env.INCOMING_OCR_PROVIDER = "gemini";
+    const noProvider = await post(`/api/incoming/${d.id}/read`, {
+      expectedVersion: 1,
+      consent: true,
+    });
+    expect(noProvider.status).toBe(409);
+    process.env.INCOMING_OCR_PROVIDER = "openai";
     process.env.INCOMING_OCR_API_KEY = "synthetic";
     vi.stubGlobal(
       "fetch",

@@ -6,7 +6,7 @@ Mục mới dành cho **Administrator / Warehouse Operator**. Đăng nhập bằ
 
 1. Mở **Nhập liệu hàng về**, chọn tối đa 4 ảnh JPEG/PNG/WebP, tổng 8 MB → **Tạo phiếu từ ảnh**. Có thể tạo phiếu **Nhập bảng thủ công** không cần dịch vụ AI.
 2. Ảnh được lưu trong database dưới dạng bytea, có SHA-256. Tạo/lưu ảnh chưa gửi ra ngoài và chưa ghi nhận hàng. Có nút xoay ảnh và mở ảnh gốc.
-3. Nếu đã cấu hình OCR, đánh dấu đồng ý gửi những ảnh này đến OpenAI rồi bấm **Đọc ảnh & tạo bảng**. Có phí API riêng. Không tự gửi dữ liệu Lark, danh mục, lệnh hoặc ảnh khác đến nhà cung cấp. Không có lời bảo đảm độ chính xác chữ viết tay; người nhận phải so sánh ảnh với kết quả.
+3. Nếu đã cấu hình OCR, đánh dấu đồng ý gửi những ảnh này đến nhà cung cấp đang chọn (OpenAI hoặc Google Gemini) rồi bấm **Đọc ảnh & tạo bảng**. Có phí API riêng. Không tự gửi dữ liệu Lark, danh mục, lệnh hoặc ảnh khác đến nhà cung cấp. Không có lời bảo đảm độ chính xác chữ viết tay; người nhận phải so sánh ảnh với kết quả.
 4. Kiểm tra mã, màu, bao, ngày và S/M/L/XL. Mỗi hàng màu được tách thành bốn dòng size để phân bổ vào lệnh. Ô trống/khó đọc là **null**, không tự coi là 0. Chỉ điền 0 sau khi kiểm tra; có nút điền 0 các ô trống với xác nhận riêng.
 5. Chọn màu danh mục theo mã và size; nút **Gợi ý ánh xạ lại** chạy quy tắc. Khớp chính xác trước, sau đó quy ước đã lưu và gợi ý từ khóa duy nhất theo mã. Ví dụ MIU37 + Cam chỉ tự gợi ý Cam cháy (phối đen) khi đây là màu phù hợp duy nhất; có hai màu Cam thì phải chọn. Trắng đỏ có thể khớp Trắng (Phối đỏ). Gợi ý từ khóa phải khớp màu chính ở đầu tên; không lấy Đen để tự chọn Cam cháy (phối đen). Không tự tạo SKU/màu và không chuyển XS thành S hoặc XXL thành XL.
 6. Nếu chỉ có một lệnh phù hợp còn chờ cho SKU, gợi ý lệnh đó; nhiều lệnh thì phải chọn. Lệnh đã đủ vẫn chọn được để nhận giao dư. Lệnh hủy/xóa không được chọn. Xưởng/ngày/lệnh hiển thị để kiểm tra. **Tách dòng** tạo dòng cùng SKU với số nhận 0; giảm dòng gốc và chia số lượng sang lệnh khác, tránh nhân đôi. Tổng hiện tại và tổng OCR ban đầu hiển thị để đối soát.
@@ -22,11 +22,12 @@ Service **khanh → Variables → New Variable**:
 ```dotenv
 INCOMING_OCR_API_KEY=
 INCOMING_OCR_MODEL=gpt-4.1-mini
+INCOMING_OCR_PROVIDER=openai
 ```
 
-`INCOMING_OCR_API_KEY` là API key của dự án OpenAI có hạn mức sử dụng; **không phải** Lark App Secret và **không phải** tài khoản/gói ChatGPT. Điền giá trị thật trực tiếp vào Railway, không gửi trong chat hoặc commit. Model tùy chọn; phải hỗ trợ hình ảnh, JSON mode và Chat Completions. Deploy lại sau khi lưu. Backend gọi cố định `https://api.openai.com/v1/chat/completions`, timeout 60 giây, không tự retry gửi ảnh; khi thất bại vẫn giữ ảnh/nháp.
+`INCOMING_OCR_API_KEY` là API key của dự án OpenAI có hạn mức sử dụng; **không phải** Lark App Secret và **không phải** tài khoản/gói ChatGPT. Điền giá trị thật trực tiếp vào Railway, không gửi trong chat hoặc commit. Model OpenAI tùy chọn; phải hỗ trợ hình ảnh, JSON mode và Chat Completions. Deploy lại sau khi lưu. Backend gọi cố định `https://api.openai.com/v1/chat/completions`, timeout 60 giây, không tự retry gửi ảnh; khi thất bại vẫn giữ ảnh/nháp.
 
-Nếu chưa muốn dùng nhà cung cấp ngoài, để trống khóa: tạo phiếu/ảnh, nhập tay, ánh xạ và ghi nhận vẫn hoạt động; nút đọc ảnh bị khóa và có hướng dẫn. Chỉ ảnh trong phiếu đã chọn được gửi khi người dùng đồng ý và chủ động bấm đọc. Cần thống nhất việc dùng nhà cung cấp trước khi đưa chứng từ công ty vào chức năng này.
+Nếu chưa muốn dùng nhà cung cấp ngoài, để trống khóa: tạo phiếu/ảnh, nhập tay, ánh xạ và ghi nhận vẫn hoạt động; nút đọc ảnh bị khóa và có hướng dẫn. Chỉ ảnh trong phiếu đã chọn được gửi khi người dùng đồng ý và chủ động bấm đọc. Không có cơ chế tự gửi sang nhà cung cấp khác khi lỗi. Cần thống nhất việc dùng nhà cung cấp trước khi đưa chứng từ công ty vào chức năng này.
 
 Hợp đồng request đã đối chiếu với mã nguồn SDK chính thức: https://github.com/openai/openai-node/blob/master/src/resources/chat/completions/completions.ts (image_url, response_format json_object, max_completion_tokens). Chưa kiểm tra bằng key thật hoặc đo độ chính xác trên phiếu thật; tests mô phỏng provider và kiểm tra backend/API/giao diện thật.
 
@@ -35,3 +36,25 @@ Hợp đồng request đã đối chiếu với mã nguồn SDK chính thức: h
 Migration **009** thêm `incoming_goods_drafts`, `incoming_goods_images`, `incoming_color_aliases`. Không đổi lệnh/biên nhận cũ. Ảnh và bản nháp được lưu PostgreSQL trên Railway, bao gồm trong backup database. Ảnh giới hạn theo phiếu; cần theo dõi dung lượng database khi dùng lâu dài. Chưa có OCR tự host, xử lý PDF/HEIC, tự crop, tự xóa ảnh theo lịch hoặc tìm trùng bằng nội dung hình ảnh.
 
 Chống trùng dựa trên bytes SHA-256 của ảnh: một ảnh đã xác nhận không được xác nhận ở phiếu khác hoặc tải lại làm phiếu mới. Hai lần chụp khác nhau cùng phiếu có thể có hash khác, vẫn cần nhân viên đối soát. Phiếu thủ công không có ảnh cần tự kiểm tra số chứng từ. Retry cùng nội dung/cùng phiếu trả lại kết quả cũ; nội dung khác sau khi đã xác nhận trả 409. Khóa version từng lệnh, khóa ảnh và transaction đảm bảo không ghi một phần khi xung đột. API kiểm tra quyền, CSRF/Origin, chủ phiếu; ảnh đính kèm lệnh chỉ đọc được khi đăng nhập có quyền xem lệnh. Các ảnh/nháp chưa xác nhận chỉ chủ phiếu hoặc Administrator truy cập bằng ID.
+
+## Dùng Google Gemini
+
+Railway → đúng service đang chạy ứng dụng → Variables → tạo **từng biến riêng**:
+
+```dotenv
+INCOMING_OCR_PROVIDER=gemini
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-flash-latest
+```
+
+Điền API key thật từ https://aistudio.google.com/apikey trực tiếp vào giá trị `GEMINI_API_KEY`. Không đặt vào biến `env`, không đặt vào `INCOMING_OCR_API_KEY`, không đưa khóa vào frontend/chat. `GEMINI_MODEL` có thể dùng model Gemini hỗ trợ ảnh và JSON mà dự án có quyền truy cập; model mặc định là alias Flash theo ví dụ SDK Google hiện hành. Đổi model không thay công thức hay tự xác nhận hàng.
+
+Bấm **Deploy**, chờ build thành công, tải lại web bằng Ctrl + F5. Trong Nhập liệu hàng về, ô đồng ý phải ghi **Google Gemini**, cảnh báo thiếu khóa nếu có phải nhắc **GEMINI_API_KEY**. Nếu vẫn hiện thông báo cũ chỉ nhắc OpenAI/INCOMING_OCR_API_KEY, kiểm tra service đã lấy đúng mã nguồn mới và nhánh `comsflow-railway`; chỉ thêm biến môi trường không cập nhật mã nguồn cũ.
+
+Nếu chỉ có GEMINI_API_KEY và chưa chọn provider, backend tự nhận Gemini; khi có cả hai khóa, giữ OpenAI để tương thích. Đặt rõ INCOMING_OCR_PROVIDER=gemini để tránh nhầm. INCOMING_OCR_MODEL của OpenAI không dùng làm model Gemini. Không cần xóa khóa OpenAI khi chuyển Gemini, nhưng không được dán khóa Gemini vào biến OpenAI.
+
+Backend gọi cố định `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`, gửi khóa qua header `x-goog-api-key`, ảnh base64 `inlineData`, yêu cầu `application/json`. Không dùng query-string chứa khóa. Timeout60 giây, không tự retry/failover. HTTP429 báo hạn mức; đầu ra bị chặn, thiếu, không hoàn tất hoặc JSON sai đều không tạo biên nhận. Khóa/quota/tài khoản AI Studio tách biệt với đăng nhập Lark và gói Gemini chat.
+
+Ô đồng ý ghi tên nhà cung cấp thực tế. Client gửi provider đã đồng ý; nếu server đã đổi provider thì trả409, yêu cầu tải lại và đồng ý lại. Client cũ thiếu provider chỉ tương thích với OpenAI, không được tự gửi sang Google. Nhật ký lưu nhà cung cấp/model thực tế, không lưu khóa.
+
+Hợp đồng API đã đối chiếu với nguồn SDK Google chính thức: https://github.com/googleapis/js-genai/blob/main/README.md và https://github.com/googleapis/js-genai/blob/main/src/types.ts. Trang ai.google.dev không truy cập được từ môi trường kiểm thử (proxy403). Chưa gọi dịch vụ bằng khóa thật hoặc gửi ảnh công ty; kiểm thử dùng response mô phỏng, cùng luồng preview/ánh xạ/xác nhận hiện có.

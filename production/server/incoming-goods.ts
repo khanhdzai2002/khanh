@@ -419,9 +419,16 @@ incomingRouter.post(
         .object({
           expectedVersion: z.number().int().positive(),
           consent: z.literal(true),
+          provider: z.enum(["openai", "gemini"]).optional(),
         })
         .strict()
         .parse(req.body);
+    const config = incomingOcrStatus();
+    if ((input.provider || "openai") !== config.providerId)
+      throw new AppError(
+        409,
+        "Nhà cung cấp đọc ảnh đã thay đổi. Tải lại trang và đồng ý với nhà cung cấp hiện tại trước khi gửi ảnh",
+      );
     const d = await incomingDraft(pool, req.actor!, id);
     editable(d, input.expectedVersion);
     if (d.form.rows.length)
@@ -440,8 +447,8 @@ incomingRouter.post(
       const current = await incomingDraft(db, req.actor!, id, true);
       editable(current, input.expectedVersion);
       await audit(db, req.actor!.id, "incoming.ocr.request", id, {
-        provider: "OpenAI",
-        model: incomingOcrStatus().model,
+        provider: config.provider,
+        model: config.model,
         consent: true,
         imageCount: images.length,
       });
@@ -472,8 +479,8 @@ incomingRouter.post(
         [id, JSON.stringify(form), JSON.stringify(result)],
       );
       await audit(db, req.actor!.id, "incoming.ocr", id, {
-        provider: "OpenAI",
-        model: incomingOcrStatus().model,
+        provider: config.provider,
+        model: config.model,
         consent: true,
         imageCount: images.length,
       });

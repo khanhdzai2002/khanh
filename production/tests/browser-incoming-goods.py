@@ -1,5 +1,5 @@
 """Synthetic _test + serve-incoming-smoke.ts only. No real provider or company data."""
-import base64
+import base64,os
 from playwright.sync_api import sync_playwright,expect
 png=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==')
 with sync_playwright() as p:
@@ -22,6 +22,9 @@ with sync_playwright() as p:
  assert created.value.status==201;draft_id=created.value.json()['id']
  expect(page.get_by_text('Đã tạo phiếu nháp.',exact=False)).to_be_visible()
  read=page.get_by_role('button',name='Đọc ảnh & tạo bảng',exact=True);expect(read).to_be_disabled()
+ if os.environ.get('INCOMING_EXPECT_PROVIDER')=='gemini':
+  assert page.request.get('http://localhost:5175/api/incoming/status').json()['providerId']=='gemini'
+  expect(page.get_by_text('Tôi đồng ý gửi ảnh phiếu này đến Google Gemini',exact=False)).to_be_visible()
  page.get_by_text('Tôi đồng ý gửi ảnh phiếu này',exact=False).click()
  with page.expect_response(lambda r:r.url.endswith('/read')) as extracted:read.click()
  assert extracted.value.status==200,extracted.value.text()

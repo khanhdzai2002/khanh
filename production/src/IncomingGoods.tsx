@@ -75,6 +75,9 @@ export function IncomingGoods({
   useEffect(() => {
     setChecked(false);
   }, [data.orders]);
+  useEffect(() => {
+    setConsent(false);
+  }, [status?.providerId]);
   function suggest(rows: IncomingRow[], rules = aliases) {
     return rows.map((r) => {
       const color = matchColor(r.sku, r.color, data.skus, rules).color;
@@ -184,10 +187,13 @@ export function IncomingGoods({
   const read = () =>
     act(async () => {
       if (!consent)
-        throw Error("Cần đồng ý gửi ảnh đến OpenAI trước khi đọc ảnh.");
+        throw Error(
+          `Cần đồng ý gửi ảnh đến ${status?.provider || "nhà cung cấp đã chọn"} trước khi đọc ảnh.`,
+        );
       const r = await send(`/api/incoming/${draft.id}/read`, {
         expectedVersion: draft.version,
         consent: true,
+        provider: status?.providerId,
       });
       setDraft({ ...draft, version: r.version, ocr: r.ocr });
       setForm({ ...r.form, rows: suggest(r.form.rows) });
@@ -323,8 +329,11 @@ export function IncomingGoods({
         {status && !status.configured && (
           <Notice>
             Chưa cấu hình dịch vụ đọc ảnh. Có thể lưu ảnh và nhập bảng thủ công
-            ngay. Administrator cần bổ sung INCOMING_OCR_API_KEY trong backend
-            để bật đọc ảnh.
+            ngay.
+            {status.configurationError ||
+              ` Administrator cần bổ sung ${status.keyVariable} trong backend để bật ${status.provider}.`}
+            {status.providerId === "openai" &&
+              " Nếu dùng Gemini: đặt INCOMING_OCR_PROVIDER=gemini và GEMINI_API_KEY trong Railway rồi Deploy lại."}
           </Notice>
         )}
       </section>
@@ -392,8 +401,9 @@ export function IncomingGoods({
                         disabled={busy}
                         onChange={(e) => setConsent(e.target.checked)}
                       />{" "}
-                      Tôi đồng ý gửi ảnh phiếu này đến OpenAI để nhận dạng (có
-                      tính phí API).
+                      Tôi đồng ý gửi ảnh phiếu này đến{" "}
+                      {status?.provider || "nhà cung cấp đã chọn"} để nhận dạng
+                      (theo phí và hạn mức API của nhà cung cấp).
                     </label>
                     <button
                       disabled={
