@@ -132,3 +132,7 @@ Giới hạn V9 nhận không vượt còn chờ được thay bằng [chính s�
 ## Điều chỉnh theo yêu cầu: bỏ OCR, tự động cộng dồn hàng về
 
 Ảnh chỉ dùng làm chứng từ nhập tay. Chọn mã/màu từ lệnh sản xuất, phân bổ FIFO đúng mã–màu–size vào phần còn thiếu, xem trước và xác nhận transaction. Phần dư yêu cầu chọn lệnh rõ ràng. Không thay công thức gối hàng hoặc tự cộng tồn kho. Xem [hướng dẫn hiện hành](production/docs/INCOMING_GOODS.md).
+
+## Nhập hàng theo bao và ma trận size
+
+Theo yêu cầu vận hành, phiếu hàng về hiển thị Bao → dòng mã/màu thụt lề → bốn cột S/M/L/XL. Số bao chỉ nhập một lần; thêm màu kế thừa bao; tổng size/dòng/bao/phiếu. Giữ dòng SKU và lệnh riêng từng ô tại backend, không đổi thuật toán FIFO hoặc ghi lại biên nhận cũ.

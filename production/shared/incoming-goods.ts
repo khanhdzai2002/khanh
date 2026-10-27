@@ -6,6 +6,8 @@ export const incomingRowSchema = z
     sku: z.string().trim().min(1).max(90),
     color: z.string().trim().min(1).max(200),
     bag: z.string().max(80).default(""),
+    bagGroupId: z.uuid().optional(),
+    lineGroupId: z.uuid().optional(),
     size: z.enum(sizes),
     qty: z.number().int().min(0).max(1000000).nullable(),
     variantId: z.uuid().nullable(),

@@ -205,3 +205,9 @@ Chromium `browser-incoming-goods.py` dùng ảnh PNG tổng hợp và backend th
 Một lần chạy suite gặp test fixture tài khoản dùng cookie ngay khi mới nhận headers, trả401 thay vì403. Đã sửa helper test chờ response body hoàn tất (cùng nguyên nhân fixture bootstrap đã từng gặp); không đổi auth production. Suite chạy lại đạt232/232.
 
 Bảng tổng theo mã–màu–size có test riêng: hai lệnh còn150+200, nhận100 chỉ chạm lệnh đầu nhưng tổng còn thiếu sau vẫn là250 (không bỏ lệnh chưa cần phân bổ).
+
+## Ma trận S/M/L/XL và nhóm bao
+
+241 tests /19 files đạt. 8 tests helper mới bảo toàn số lượng/ID/null/lệnh theo size khi gom phiếu cũ, giữ thứ tự bao, không gộp nhầm hai dòng cùng size, không gộp bao/dòng có ID riêng dù trùng nhãn, chuẩn hóa nhóm idempotent và JSON roundtrip. Integration test mới xác nhận bốn ô size chung bao vẫn phân bổ FIFO300 thành150+150 và lưu nguyên ID bao/dòng tại backend.
+
+Chromium mới `browser-incoming-matrix.py`:8 dòng SKU cũ →2 bao/4 dòng màu, giữ3/1/2/4 theo S/M/L/XL →đổi số bao một lần →thêm bao và thêm màu kế thừa bao/mã →hai dòng cùng màu không bị nhập chung →save/reload16 ô dữ liệu, giữ tất cả ID cũ →xác nhận391 sản phẩm, kiểm tra đúng17 chiếc sizeS MIU15 qua nhiều bao/dòng →mobile không tràn. Dữ liệu tổng hợp `_test`, không dùng ảnh hoặc lệnh công ty. Kèm các luồng FIFO/ảnh và chọn lệnh thủ công hiện có đã cập nhật thao tác theo ma trận.

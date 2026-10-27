@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { api, send, fileBase64 } from "./api";
-import { can, sizes, totals, isActiveSize, type Role } from "../shared/domain";
+import { can, isActiveSize, type Role } from "../shared/domain";
 import {
   incomingFormSchema,
-  incomingOrders,
-  normalizeLabel,
   type IncomingForm,
   type IncomingRow,
 } from "../shared/incoming-goods";
 import { Field, Notice, fmt, vnDate, type Run } from "./ui";
 import type { Snapshot } from "./App";
+import { IncomingBagTable, newIncomingLine } from "./IncomingBagTable";
+import { incomingMatrix, withIncomingGroups } from "../shared/incoming-matrix";
 type Preview = {
   id?: string;
   allocations: any[];
@@ -27,19 +27,6 @@ const today = () =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(
     new Date(),
   );
-const emptyRow = (): IncomingRow => ({
-  id: crypto.randomUUID(),
-  sku: "",
-  color: "",
-  bag: "",
-  size: "S",
-  qty: null,
-  variantId: null,
-  orderId: null,
-  remember: false,
-  allocationMode: "auto",
-  excessOrderId: null,
-});
 export function IncomingGoods({
   data,
   role,
@@ -89,9 +76,6 @@ export function IncomingGoods({
       ),
     ).values(),
   ];
-  const codes = [...new Set(variants.map((v) => v.sku))].sort((a, b) =>
-    a.localeCompare(b, "vi"),
-  );
   const suppliers = [...new Set(activeOrders.map((o) => o.supplier))].sort(
     (a, b) => a.localeCompare(b, "vi"),
   );
@@ -124,13 +108,21 @@ export function IncomingGoods({
     setChecked(false);
     setPreview(null);
   };
-  const patch = (id: string, change: Partial<IncomingRow>) =>
+  const addBag = () => {
+    const current = withIncomingGroups(form.rows);
+    const next = String(
+      Math.max(
+        0,
+        ...incomingMatrix(current).map((b) =>
+          /^\d+$/.test(b.label) ? Number(b.label) : 0,
+        ),
+      ) + 1,
+    );
     edit({
       ...form,
-      rows: form.rows.map((r) =>
-        r.id === id ? { ...r, ...change, remember: false } : r,
-      ),
+      rows: [...current, ...newIncomingLine(crypto.randomUUID(), next)],
     });
+  };
   const load = async (id: string) => {
     const d = await api(`/api/incoming/${id}`);
     setDraft(d);
@@ -138,7 +130,7 @@ export function IncomingGoods({
       d.state === "draft"
         ? {
             ...d.form,
-            rows: d.form.rows.map((r: IncomingRow) => ({
+            rows: withIncomingGroups(d.form.rows).map((r: IncomingRow) => ({
               ...r,
               remember: false,
             })),
@@ -295,9 +287,18 @@ export function IncomingGoods({
   const positive = form.rows.filter((r) => (r.qty || 0) > 0),
     auto = positive.some((r) => r.allocationMode === "auto");
   const unknown = form.rows.filter((r) => r.qty === null).length,
-    unmatched = positive.filter(
-      (r) => !r.variantId || (r.allocationMode !== "auto" && !r.orderId),
-    ).length;
+    unmatched = incomingMatrix(form.rows)
+      .flatMap((b) => b.lines)
+      .filter(
+        (l) =>
+          !l.sku ||
+          !l.color ||
+          Object.values(l.cells).some(
+            (r) =>
+              (r.qty || 0) > 0 &&
+              (!r.variantId || (r.allocationMode !== "auto" && !r.orderId)),
+          ),
+      ).length;
   const total = form.rows.reduce((n, r) => n + (r.qty || 0), 0);
   const photo = draft?.images?.[imageIndex];
   const displayedPreview =
@@ -495,13 +496,8 @@ export function IncomingGoods({
                 </span>
               </div>
               <div className="actions">
-                <button
-                  disabled={locked}
-                  onClick={() =>
-                    edit({ ...form, rows: [...form.rows, emptyRow()] })
-                  }
-                >
-                  Thêm dòng hàng
+                <button disabled={locked} onClick={addBag}>
+                  Thêm bao
                 </button>
                 <button
                   disabled={locked || !form.rows.length}
@@ -520,301 +516,26 @@ export function IncomingGoods({
                 </button>
               </div>
               <p>
-                Mã và màu lấy từ các lệnh sản xuất đang lưu. Đổi mã sẽ cập nhật
-                danh sách màu tương ứng. Bảng có thể cuộn ngang.
+                Mỗi bao nhập số một lần; các dòng màu bên dưới thuộc bao đó.
+                Điền trực tiếp vào cột S/M/L/XL, ô trống của dòng mới tính là 0.
+                Size không có trong lệnh sẽ khóa. Lệnh nhận hoặc giao dư có thể
+                chọn riêng từng size.
               </p>
-              <div className="table-scroll">
-                <table className="incoming-table">
-                  <thead>
-                    <tr>
-                      {[
-                        "Bao",
-                        "Mã trên phiếu",
-                        "Màu trên phiếu",
-                        "Size",
-                        "Số nhận",
-                        "Lệnh nhận",
-                        "Lệnh nhận phần dư (nếu có)",
-                        "Thao tác",
-                      ].map((t) => (
-                        <th key={t}>{t}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {form.rows.map((r, index) => {
-                      const colors = [
-                        ...new Set(
-                          variants
-                            .filter((v) => v.sku === r.sku)
-                            .map((v) => v.color),
-                        ),
-                      ].sort((a, b) => a.localeCompare(b, "vi"));
-                      const candidateSizes = variants
-                        .filter((v) => v.sku === r.sku && v.color === r.color)
-                        .map((v) => v.size);
-                      const options = incomingOrders(
-                        data.orders,
-                        r.variantId,
-                      ).filter(
-                        (o) => !form.supplier || o.supplier === form.supplier,
-                      );
-                      const pick = (
-                        sku: string,
-                        color: string,
-                        size: IncomingRow["size"],
-                      ) => {
-                        const v = variants.find(
-                          (v) =>
-                            v.sku === sku &&
-                            v.color === color &&
-                            v.size === size,
-                        );
-                        patch(r.id, {
-                          sku,
-                          color,
-                          size,
-                          variantId: v?.id || null,
-                          orderId: null,
-                          excessOrderId: null,
-                        });
-                      };
-                      return (
-                        <tr
-                          key={r.id}
-                          className={
-                            r.qty === null ||
-                            ((r.qty || 0) > 0 &&
-                              (!r.variantId ||
-                                (r.allocationMode !== "auto" && !r.orderId)))
-                              ? "incoming-unresolved"
-                              : ""
-                          }
-                        >
-                          <td>
-                            <input
-                              aria-label={`Bao dòng ${index + 1}`}
-                              value={r.bag}
-                              disabled={locked}
-                              onChange={(e) =>
-                                patch(r.id, { bag: e.target.value })
-                              }
-                            />
-                          </td>
-                          <td>
-                            <select
-                              aria-label={`Mã dòng ${index + 1}`}
-                              value={r.sku}
-                              disabled={locked}
-                              onChange={(e) => pick(e.target.value, "", r.size)}
-                            >
-                              <option value="">Chọn mã sản phẩm</option>
-                              {r.sku && !codes.includes(r.sku) && (
-                                <option value={r.sku}>
-                                  {r.sku} — chọn lại từ danh mục
-                                </option>
-                              )}
-                              {codes.map((c) => (
-                                <option key={c}>{c}</option>
-                              ))}
-                            </select>
-                          </td>
-                          <td>
-                            <select
-                              aria-label={`Màu dòng ${index + 1}`}
-                              value={r.color}
-                              disabled={locked || !r.sku}
-                              onChange={(e) => {
-                                const color = e.target.value;
-                                const valid = variants.filter(
-                                  (v) => v.sku === r.sku && v.color === color,
-                                );
-                                const size = valid.some(
-                                  (v) => v.size === r.size,
-                                )
-                                  ? r.size
-                                  : sizes.find((s) =>
-                                      valid.some((v) => v.size === s),
-                                    ) || r.size;
-                                pick(r.sku, color, size);
-                              }}
-                            >
-                              <option value="">Chọn màu của mã</option>
-                              {r.color && !colors.includes(r.color) && (
-                                <option value={r.color}>
-                                  {r.color} — chọn lại màu chuẩn
-                                </option>
-                              )}
-                              {colors.map((c) => (
-                                <option key={c}>{c}</option>
-                              ))}
-                            </select>
-                          </td>
-                          <td>
-                            <select
-                              aria-label={`Size dòng ${index + 1}`}
-                              value={r.size}
-                              disabled={locked}
-                              onChange={(e) =>
-                                pick(
-                                  r.sku,
-                                  r.color,
-                                  e.target.value as IncomingRow["size"],
-                                )
-                              }
-                            >
-                              {sizes.map((s) => (
-                                <option
-                                  key={s}
-                                  disabled={
-                                    !!r.color && !candidateSizes.includes(s)
-                                  }
-                                >
-                                  {s}
-                                </option>
-                              ))}
-                            </select>
-                          </td>
-                          <td>
-                            <input
-                              aria-label={`Số nhận dòng ${index + 1}`}
-                              type="number"
-                              min="0"
-                              max="1000000"
-                              step="1"
-                              value={r.qty ?? ""}
-                              placeholder="Nhập SL"
-                              disabled={locked}
-                              onChange={(e) =>
-                                patch(r.id, {
-                                  qty:
-                                    e.target.value === ""
-                                      ? null
-                                      : Number(e.target.value),
-                                })
-                              }
-                            />
-                          </td>
-                          <td>
-                            <select
-                              aria-label={`Lệnh dòng ${index + 1}`}
-                              value={
-                                r.allocationMode === "auto"
-                                  ? "auto"
-                                  : r.orderId || ""
-                              }
-                              disabled={locked}
-                              onChange={(e) =>
-                                patch(r.id, {
-                                  allocationMode:
-                                    e.target.value === "auto"
-                                      ? "auto"
-                                      : "manual",
-                                  orderId:
-                                    e.target.value === "auto"
-                                      ? null
-                                      : e.target.value || null,
-                                  excessOrderId: null,
-                                })
-                              }
-                            >
-                              <option value="">Chọn lệnh thủ công</option>
-                              <option value="auto">Tự động cộng dồn</option>
-                              {options.map((o) => {
-                                const i = o.items.find(
-                                  (i) => i.variantId === r.variantId,
-                                )!;
-                                return (
-                                  <option key={o.id} value={o.id}>
-                                    {o.code} · {o.supplier} · còn{" "}
-                                    {Math.max(0, i.qty - i.received)} ·{" "}
-                                    {totals(o).status}
-                                  </option>
-                                );
-                              })}
-                            </select>
-                            {r.orderId && (
-                              <button onClick={() => viewOrder(r.orderId!)}>
-                                Xem lệnh
-                              </button>
-                            )}
-                          </td>
-                          <td>
-                            {r.allocationMode === "auto" ? (
-                              <select
-                                aria-label={`Lệnh nhận dư dòng ${index + 1}`}
-                                value={r.excessOrderId || ""}
-                                disabled={locked}
-                                onChange={(e) =>
-                                  patch(r.id, {
-                                    excessOrderId: e.target.value || null,
-                                  })
-                                }
-                              >
-                                <option value="">Không tự gán hàng dư</option>
-                                {options
-                                  .filter(
-                                    (o) =>
-                                      (form.includeDrafts ||
-                                        o.status !== "Nháp") &&
-                                      (form.includePaused ||
-                                        o.status !== "Tạm dừng"),
-                                  )
-                                  .map((o) => (
-                                    <option key={o.id} value={o.id}>
-                                      {o.code} · {o.supplier}
-                                    </option>
-                                  ))}
-                              </select>
-                            ) : (
-                              "—"
-                            )}
-                          </td>
-                          <td>
-                            <button
-                              disabled={locked}
-                              onClick={() =>
-                                edit({
-                                  ...form,
-                                  rows: [
-                                    ...form.rows,
-                                    {
-                                      ...r,
-                                      id: crypto.randomUUID(),
-                                      qty: null,
-                                      orderId: null,
-                                      allocationMode: "auto",
-                                      excessOrderId: null,
-                                      remember: false,
-                                    },
-                                  ],
-                                })
-                              }
-                            >
-                              Thêm size / dòng tương tự
-                            </button>
-                            <button
-                              disabled={locked}
-                              onClick={() =>
-                                edit({
-                                  ...form,
-                                  rows: form.rows.filter((x) => x.id !== r.id),
-                                })
-                              }
-                            >
-                              Bỏ dòng
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <IncomingBagTable
+                rows={form.rows}
+                variants={variants}
+                orders={data.orders}
+                supplier={form.supplier}
+                includeDrafts={form.includeDrafts}
+                includePaused={form.includePaused}
+                disabled={locked}
+                onChange={(rows) => edit({ ...form, rows })}
+                onOrder={viewOrder}
+              />
               {!form.rows.length && (
                 <Notice>
-                  Bấm Thêm dòng hàng, chọn mã–màu–size rồi nhập số lượng từ
-                  phiếu kiểm.
+                  Bấm Thêm bao, chọn mã và màu rồi điền số lượng vào các cột
+                  S/M/L/XL.
                 </Notice>
               )}
               {draft.state === "draft" && (
@@ -846,10 +567,7 @@ export function IncomingGoods({
                   <button
                     className="primary"
                     disabled={
-                      busy ||
-                      !positive.length ||
-                      !!unknown ||
-                      positive.some((r) => !r.variantId)
+                      busy || !positive.length || !!unknown || !!unmatched
                     }
                     onClick={() => void allocate()}
                   >

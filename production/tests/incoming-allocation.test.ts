@@ -426,3 +426,39 @@ it("SKU balance includes untouched matching orders, not just allocation lines", 
     pendingAfter: 250,
   });
 });
+
+it("four-size rows under one bag confirm FIFO and retain grouping metadata", async () => {
+  const a = await fixture(),
+    b = await fixture(150, "2026-10-24T10:00:00+07:00"),
+    d = await draft();
+  const bagGroupId = randomUUID(),
+    lineGroupId = randomUUID();
+  const rows = (["S", "M", "L", "XL"] as const).map((size) => ({
+    ...row(a, size === "M" ? 300 : 0),
+    bag: "14",
+    bagGroupId,
+    lineGroupId,
+    size,
+    variantId: size === "M" ? a.items[0].variantId : null,
+  }));
+  const f = form(rows),
+    p = await preview(d.id, f);
+  expect(p.allocated).toBe(300);
+  await tx((db) => confirmIncoming(db, actor, d.id, confirmation(f, p)));
+  const saved = (
+    await pool.query("SELECT form FROM incoming_goods_drafts WHERE id=$1", [
+      d.id,
+    ])
+  ).rows[0].form;
+  expect(saved.rows).toHaveLength(4);
+  expect(
+    saved.rows.every(
+      (r: any) =>
+        r.bagGroupId === bagGroupId &&
+        r.lineGroupId === lineGroupId &&
+        r.bag === "14",
+    ),
+  ).toBe(true);
+  expect((await loadOrder(pool, a.id)).items[0].received).toBe(150);
+  expect((await loadOrder(pool, b.id)).items[0].received).toBe(150);
+});
