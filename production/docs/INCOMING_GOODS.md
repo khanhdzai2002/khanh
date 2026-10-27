@@ -1,60 +1,41 @@
-# Nhập liệu hàng về
+# Nhập liệu hàng về — xem ảnh, nhập tay và tự động cộng dồn
 
-Mục mới dành cho **Administrator / Warehouse Operator**. Đăng nhập bằng Lark; không tự nâng quyền Planner/Viewer. Dữ liệu tập trung tại PostgreSQL, không dùng localStorage.
+Theo yêu cầu mới, bỏ OCR. Ảnh dùng làm chứng từ để nhân viên xem và nhập số lượng vào bảng. Không gọi OpenAI/Gemini, không cần API key. Backend `/read` cũ trả410 để không có client cũ nào tiếp tục gửi ảnh ra ngoài.
 
-## Sử dụng
+## Cách sử dụng
 
-1. Mở **Nhập liệu hàng về**, chọn tối đa 4 ảnh JPEG/PNG/WebP, tổng 8 MB → **Tạo phiếu từ ảnh**. Có thể tạo phiếu **Nhập bảng thủ công** không cần dịch vụ AI.
-2. Ảnh được lưu trong database dưới dạng bytea, có SHA-256. Tạo/lưu ảnh chưa gửi ra ngoài và chưa ghi nhận hàng. Có nút xoay ảnh và mở ảnh gốc.
-3. Nếu đã cấu hình OCR, đánh dấu đồng ý gửi những ảnh này đến nhà cung cấp đang chọn (OpenAI hoặc Google Gemini) rồi bấm **Đọc ảnh & tạo bảng**. Có phí API riêng. Không tự gửi dữ liệu Lark, danh mục, lệnh hoặc ảnh khác đến nhà cung cấp. Không có lời bảo đảm độ chính xác chữ viết tay; người nhận phải so sánh ảnh với kết quả.
-4. Kiểm tra mã, màu, bao, ngày và S/M/L/XL. Mỗi hàng màu được tách thành bốn dòng size để phân bổ vào lệnh. Ô trống/khó đọc là **null**, không tự coi là 0. Chỉ điền 0 sau khi kiểm tra; có nút điền 0 các ô trống với xác nhận riêng.
-5. Chọn màu danh mục theo mã và size; nút **Gợi ý ánh xạ lại** chạy quy tắc. Khớp chính xác trước, sau đó quy ước đã lưu và gợi ý từ khóa duy nhất theo mã. Ví dụ MIU37 + Cam chỉ tự gợi ý Cam cháy (phối đen) khi đây là màu phù hợp duy nhất; có hai màu Cam thì phải chọn. Trắng đỏ có thể khớp Trắng (Phối đỏ). Gợi ý từ khóa phải khớp màu chính ở đầu tên; không lấy Đen để tự chọn Cam cháy (phối đen). Không tự tạo SKU/màu và không chuyển XS thành S hoặc XXL thành XL.
-6. Nếu chỉ có một lệnh phù hợp còn chờ cho SKU, gợi ý lệnh đó; nhiều lệnh thì phải chọn. Lệnh đã đủ vẫn chọn được để nhận giao dư. Lệnh hủy/xóa không được chọn. Xưởng/ngày/lệnh hiển thị để kiểm tra. **Tách dòng** tạo dòng cùng SKU với số nhận 0; giảm dòng gốc và chia số lượng sang lệnh khác, tránh nhân đôi. Tổng hiện tại và tổng OCR ban đầu hiển thị để đối soát.
-7. **Ghi nhớ theo mã** chỉ lưu khi xác nhận biên nhận thành công. Quy ước mã–cách viết màu chỉ áp dụng cho mã đó; không tự ghi đè quy ước cũ nếu khác. Nếu cần nhập ngoại lệ, bỏ Ghi nhớ để không đổi quy ước chung.
-8. **Lưu nháp** trước khi rời trang. Có thể mở lại 100 phiếu gần nhất của mình; mỗi phiếu có version để phát hiện hai người sửa. **Xem lệnh** tự lưu bảng hợp lệ trước khi chuyển trang. Nhấn tải lại dữ liệu ở đầu app rồi mở lại phiếu nếu lệnh vừa được người khác cập nhật.
-9. Đánh dấu đã kiểm tra rồi **Xác nhận ghi nhận hàng**. Mọi số lượng phải rõ, dòng có hàng phải khớp đúng mã–size và SKU của lệnh. Số bao không tính là sản lượng. Các dòng trùng SKU trong cùng lệnh được gộp thành một dòng biên nhận; nhiều lệnh tạo nhiều biên nhận trong cùng transaction.
-10. Xác nhận thành công khóa phiếu; có nút mở lệnh tương ứng. Lịch sử giao nhận của lệnh có đường dẫn mở ảnh kiểm kho gốc. Không sửa biên nhận cũ, không tự cộng tồn kho và không thay số đặt gốc. Cho nhận vượt số đặt/tiến độ trên 100% theo chính sách hiện hành.
+1. Mở **Nhập liệu hàng về** bằng Administrator hoặc Warehouse Operator.
+2. Chọn 1–4 ảnh JPEG/PNG/WebP, tổng tối đa8MB, bấm **Tạo phiếu từ ảnh**. Có thể nhập không kèm ảnh. Ảnh được lưu PostgreSQL, có nút xoay, phóng to/thu nhỏ, đổi ảnh và mở cửa sổ riêng. Ẩn ảnh để xem rộng bảng khi cần.
+3. **Thêm dòng hàng** → chọn **Mã trên phiếu** từ mã đã có trong lệnh đang lưu. **Màu trên phiếu** chỉ liệt kê màu của mã đó. Chọn size S/M/L/XL đang có trong lệnh rồi nhập số thực về. Bấm **Thêm size / dòng tương tự** để nhập tiếp. Số bao chỉ để đối soát, không tính thành sản lượng. Ô số lượng chưa nhập giữ trống; nhập0 nếu thực tế không có hàng.
+4. Nếu biết lệnh, chọn trực tiếp trong **Lệnh nhận**; cho phép nhận vượt như quy trình hiện hành.
+5. Nếu chưa biết lệnh, chọn **Tự động cộng dồn**, sau đó bấm **Tự động cộng dồn — xem phân bổ**. Nút này chỉ tạo bảng xem trước, không ghi hàng ngay.
+6. Xem từng dòng phân bổ: mã lệnh, mã–màu–size, còn thiếu trước, nhận phiếu này, còn thiếu sau và giao dư. Bảng tổng hợp theo mã–màu–size tính cả những lệnh phù hợp chưa cần phân bổ, để biết tổng còn thiếu sau phiếu này. Đánh dấu đã kiểm tra, rồi **Xác nhận ghi nhận hàng** để ghi thật.
+7. **Lưu nháp** trước khi rời trang. Mở lại phiếu trong100 phiếu gần nhất; sau lưu hoặc sửa bảng cần tính phân bổ lại. Khi mở lệnh từ phiếu, bảng hợp lệ được lưu nháp trước khi chuyển trang.
 
-## Cấu hình Railway
+## Quy tắc cộng dồn
 
-Service **khanh → Variables → New Variable**:
+- Khớp đúng variant cùng mã–màu–size, không bù sang màu/size khác.
+- **Ngày giờ lập lệnh cũ trước**; nếu trùng thì theo ngày tạo, mã lệnh rồi ID để kết quả ổn định. Không dựa vào vị trí hiển thị danh sách hoặc chỉ chuỗi mã lệnh.
+- Số nhận phân bổ tối đa **max(0, số đặt − đã nhận − số đã phân bổ trong cùng phiếu)** cho từng dòng lệnh. Nhiều bao/dòng cùng SKU dùng chung bộ đếm để không tính trùng.
+- Ví dụ MIU37 / Ghi tây (Phối nâu) / M: lệnh23/10 còn150, lệnh24/10 còn200; nhập300 → nhận150 vào lệnh đầu,150 vào lệnh sau; lệnh sau còn50.
+- Dòng chọn lệnh thủ công được giữ nguyên và trừ sức chứa trước khi chia các dòng tự động, bất kể thứ tự các dòng trong bảng.
+- Không dùng lệnh đã xóa hoặc hủy phần còn lại. Mặc định loại Nháp/Tạm dừng khỏi tự động; chỉ cho tham gia khi nhân viên bật tùy chọn riêng. Nhận thủ công vào một lệnh là lựa chọn chủ động, vẫn giữ quy tắc hiện có.
+- Nếu một SKU còn thiếu ở nhiều xưởng mà chưa chọn **Nhà xưởng trả hàng**, dừng phân bổ SKU đó và yêu cầu chọn xưởng. Khi đã chọn xưởng, cả lệnh thủ công và tự động phải đúng xưởng; đổi xưởng sẽ xóa các lựa chọn lệnh cũ để tránh gán nhầm.
+- **Không tự gán hàng vượt tổng còn thiếu.** Phần chưa phân bổ hiển thị riêng. Chọn **Lệnh nhận phần dư** cùng SKU, rồi tính lại để ghi nhận giao dư vào lệnh được chọn, hoặc tách dòng nhận thủ công. Lệnh đã đủ có thể được chọn chủ động nhận phần dư. Không tự tạo lệnh hay đổi số đặt gốc.
+- Nếu không có lệnh phù hợp, phần đó giữ chưa phân bổ; không tự bỏ hàng. Tất cả số thực nhận phải được phân bổ mới xác nhận được.
 
-```dotenv
-INCOMING_OCR_API_KEY=
-INCOMING_OCR_MODEL=gpt-4.1-mini
-INCOMING_OCR_PROVIDER=openai
-```
+## Tính toàn vẹn
 
-`INCOMING_OCR_API_KEY` là API key của dự án OpenAI có hạn mức sử dụng; **không phải** Lark App Secret và **không phải** tài khoản/gói ChatGPT. Điền giá trị thật trực tiếp vào Railway, không gửi trong chat hoặc commit. Model OpenAI tùy chọn; phải hỗ trợ hình ảnh, JSON mode và Chat Completions. Deploy lại sau khi lưu. Backend gọi cố định `https://api.openai.com/v1/chat/completions`, timeout 60 giây, không tự retry gửi ảnh; khi thất bại vẫn giữ ảnh/nháp.
+Xem trước được lưu trong `import_previews` với loại `incoming-allocation`, gắn chủ phiếu, phiên bản và nội dung phiếu, hạn15phút. Khi xác nhận, backend khóa các lệnh theo thứ tự cố định, đối chiếu lại toàn bộ lệnh liên quan (kể cả lệnh mới), rồi tính lại từ dữ liệu thật. Nếu có thay đổi về số đã nhận, phiên bản, trạng thái, SKU, xưởng hoặc xuất hiện lệnh liên quan mới: trả409, không ghi một phần; nhân viên tải lại dữ liệu và tính phân bổ lại.
 
-Nếu chưa muốn dùng nhà cung cấp ngoài, để trống khóa: tạo phiếu/ảnh, nhập tay, ánh xạ và ghi nhận vẫn hoạt động; nút đọc ảnh bị khóa và có hướng dẫn. Chỉ ảnh trong phiếu đã chọn được gửi khi người dùng đồng ý và chủ động bấm đọc. Không có cơ chế tự gửi sang nhà cung cấp khác khi lỗi. Cần thống nhất việc dùng nhà cung cấp trước khi đưa chứng từ công ty vào chức năng này.
+Mỗi lệnh tạo một biên nhận, gộp các dòng cùng SKU trong lệnh. Tất cả biên nhận, lịch sử và trạng thái phiếu được lưu trong cùng transaction. Retry cùng nội dung/cùng phiếu trả kết quả đã lưu, không nhân đôi; dùng lại bảng xem trước của người/phiếu khác hoặc đã hết hạn bị chặn. Quyền, CSRF/Origin, khóa phiên bản và idempotency đều kiểm tra tại backend.
 
-Hợp đồng request đã đối chiếu với mã nguồn SDK chính thức: https://github.com/openai/openai-node/blob/master/src/resources/chat/completions/completions.ts (image_url, response_format json_object, max_completion_tokens). Chưa kiểm tra bằng key thật hoặc đo độ chính xác trên phiếu thật; tests mô phỏng provider và kiểm tra backend/API/giao diện thật.
+Giữ số đặt gốc, biên nhận cũ bất biến. Không tự cộng tồn kho. Cho nhận vượt số đặt và tiến độ trên100% khi phần dư được chọn lệnh rõ ràng. Sau xác nhận, có liên kết mở từng lệnh và ảnh kiểm kho trong lịch sử giao nhận. Kết quả phân bổ chi tiết được giữ cùng phiếu và audit để đối soát.
 
-## Lưu trữ và tính toàn vẹn
+## Dữ liệu và triển khai
 
-Migration **009** thêm `incoming_goods_drafts`, `incoming_goods_images`, `incoming_color_aliases`. Không đổi lệnh/biên nhận cũ. Ảnh và bản nháp được lưu PostgreSQL trên Railway, bao gồm trong backup database. Ảnh giới hạn theo phiếu; cần theo dõi dung lượng database khi dùng lâu dài. Chưa có OCR tự host, xử lý PDF/HEIC, tự crop, tự xóa ảnh theo lịch hoặc tìm trùng bằng nội dung hình ảnh.
+Không cần migration mới cho tính năng cộng dồn; dùng các bảng phiếu/ảnh đã tạo bởi migration009 và bảng xem trước hiện có. Không sửa dữ liệu sản xuất đang lưu khi deploy. Phiếu cũ, ảnh gốc, kết quả OCR lịch sử, biên nhận và quy ước cũ vẫn giữ trong database để đối soát; giao diện mới không tự học hay dùng AI nữa.
 
-Chống trùng dựa trên bytes SHA-256 của ảnh: một ảnh đã xác nhận không được xác nhận ở phiếu khác hoặc tải lại làm phiếu mới. Hai lần chụp khác nhau cùng phiếu có thể có hash khác, vẫn cần nhân viên đối soát. Phiếu thủ công không có ảnh cần tự kiểm tra số chứng từ. Retry cùng nội dung/cùng phiếu trả lại kết quả cũ; nội dung khác sau khi đã xác nhận trả 409. Khóa version từng lệnh, khóa ảnh và transaction đảm bảo không ghi một phần khi xung đột. API kiểm tra quyền, CSRF/Origin, chủ phiếu; ảnh đính kèm lệnh chỉ đọc được khi đăng nhập có quyền xem lệnh. Các ảnh/nháp chưa xác nhận chỉ chủ phiếu hoặc Administrator truy cập bằng ID.
+Các biến `INCOMING_OCR_*`, `GEMINI_API_KEY`, `GEMINI_MODEL` trên hosting không còn được module này sử dụng. Có thể gỡ khỏi Variables theo quy trình quản lý khóa của công ty, nhưng không cần cung cấp khóa mới để dùng tính năng. Lark vẫn xác thực danh tính, PostgreSQL vẫn là nguồn dữ liệu tập trung.
 
-## Dùng Google Gemini
-
-Railway → đúng service đang chạy ứng dụng → Variables → tạo **từng biến riêng**:
-
-```dotenv
-INCOMING_OCR_PROVIDER=gemini
-GEMINI_API_KEY=
-GEMINI_MODEL=gemini-flash-latest
-```
-
-Điền API key thật từ https://aistudio.google.com/apikey trực tiếp vào giá trị `GEMINI_API_KEY`. Không đặt vào biến `env`, không đặt vào `INCOMING_OCR_API_KEY`, không đưa khóa vào frontend/chat. `GEMINI_MODEL` có thể dùng model Gemini hỗ trợ ảnh và JSON mà dự án có quyền truy cập; model mặc định là alias Flash theo ví dụ SDK Google hiện hành. Đổi model không thay công thức hay tự xác nhận hàng.
-
-Bấm **Deploy**, chờ build thành công, tải lại web bằng Ctrl + F5. Trong Nhập liệu hàng về, ô đồng ý phải ghi **Google Gemini**, cảnh báo thiếu khóa nếu có phải nhắc **GEMINI_API_KEY**. Nếu vẫn hiện thông báo cũ chỉ nhắc OpenAI/INCOMING_OCR_API_KEY, kiểm tra service đã lấy đúng mã nguồn mới và nhánh `comsflow-railway`; chỉ thêm biến môi trường không cập nhật mã nguồn cũ.
-
-Nếu chỉ có GEMINI_API_KEY và chưa chọn provider, backend tự nhận Gemini; khi có cả hai khóa, giữ OpenAI để tương thích. Đặt rõ INCOMING_OCR_PROVIDER=gemini để tránh nhầm. INCOMING_OCR_MODEL của OpenAI không dùng làm model Gemini. Không cần xóa khóa OpenAI khi chuyển Gemini, nhưng không được dán khóa Gemini vào biến OpenAI.
-
-Backend gọi cố định `https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent`, gửi khóa qua header `x-goog-api-key`, ảnh base64 `inlineData`, yêu cầu `application/json`. Không dùng query-string chứa khóa. Timeout60 giây, không tự retry/failover. HTTP429 báo hạn mức; đầu ra bị chặn, thiếu, không hoàn tất hoặc JSON sai đều không tạo biên nhận. Khóa/quota/tài khoản AI Studio tách biệt với đăng nhập Lark và gói Gemini chat.
-
-Ô đồng ý ghi tên nhà cung cấp thực tế. Client gửi provider đã đồng ý; nếu server đã đổi provider thì trả409, yêu cầu tải lại và đồng ý lại. Client cũ thiếu provider chỉ tương thích với OpenAI, không được tự gửi sang Google. Nhật ký lưu nhà cung cấp/model thực tế, không lưu khóa.
-
-Hợp đồng API đã đối chiếu với nguồn SDK Google chính thức: https://github.com/googleapis/js-genai/blob/main/README.md và https://github.com/googleapis/js-genai/blob/main/src/types.ts. Trang ai.google.dev không truy cập được từ môi trường kiểm thử (proxy403). Chưa gọi dịch vụ bằng khóa thật hoặc gửi ảnh công ty; kiểm thử dùng response mô phỏng, cùng luồng preview/ánh xạ/xác nhận hiện có.
+Giới hạn hiện tại:100 phiếu gần nhất trong danh sách;4 ảnh/8MB mỗi phiếu; tối đa1.000 dòng bảng/phân bổ và200 lệnh trong một lần xác nhận. Chống trùng ảnh theo bytes SHA-256; hai lần chụp khác nhau cùng chứng từ vẫn cần nhân viên đối soát. Không nhận PDF/HEIC trực tiếp.

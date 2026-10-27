@@ -1,17 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import { api, send, fileBase64 } from "./api";
-import { can, sizes, totals, type Role } from "../shared/domain";
+import { can, sizes, totals, isActiveSize, type Role } from "../shared/domain";
 import {
   incomingFormSchema,
   incomingOrders,
-  matchColor,
   normalizeLabel,
   type IncomingForm,
   type IncomingRow,
-  type ColorAlias,
 } from "../shared/incoming-goods";
 import { Field, Notice, fmt, vnDate, type Run } from "./ui";
 import type { Snapshot } from "./App";
+type Preview = {
+  id?: string;
+  allocations: any[];
+  unallocated: any[];
+  orders: { id: string; version: number }[];
+  entered: number;
+  allocated: number;
+  remaining: number;
+  excess: number;
+  balances?: any[];
+  pendingBefore?: number;
+  pendingAfter?: number;
+};
 const today = () =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(
     new Date(),
@@ -26,6 +37,8 @@ const emptyRow = (): IncomingRow => ({
   variantId: null,
   orderId: null,
   remember: false,
+  allocationMode: "auto",
+  excessOrderId: null,
 });
 export function IncomingGoods({
   data,
@@ -42,64 +55,54 @@ export function IncomingGoods({
     [form, setForm] = useState<IncomingForm>({
       date: today(),
       note: "",
+      supplier: "",
       rows: [],
     });
   const [history, setHistory] = useState<any[]>([]),
-    [aliases, setAliases] = useState<ColorAlias[]>([]),
-    [status, setStatus] = useState<any>(null);
-  const [files, setFiles] = useState<File[]>([]),
-    [error, setError] = useState(""),
+    [files, setFiles] = useState<File[]>([]),
+    [preview, setPreview] = useState<Preview | null>(null);
+  const [error, setError] = useState(""),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
-    [consent, setConsent] = useState(false),
-    [checked, setChecked] = useState(false),
     [dirty, setDirty] = useState(false),
-    [angle, setAngle] = useState(0),
+    [checked, setChecked] = useState(false);
+  const [photoRatio, setPhotoRatio] = useState(1);
+  const [angle, setAngle] = useState(0),
+    [zoom, setZoom] = useState(100),
+    [imageIndex, setImageIndex] = useState(0),
     [showSource, setShowSource] = useState(true);
-  const inFlight = useRef(false);
-  const writable = can(role, "receive");
-  const reload = async () => {
-    const [h, a, s] = await Promise.all([
-      api("/api/incoming"),
-      api("/api/incoming/aliases"),
-      api("/api/incoming/status"),
-    ]);
-    setHistory(h);
-    setAliases(a);
-    setStatus(s);
-    return a as ColorAlias[];
-  };
+  const inFlight = useRef(false),
+    writable = can(role, "receive");
+  const activeOrders = data.orders.filter((o) => !o.deletedAt && !o.cancelled);
+  const variants = [
+    ...new Map(
+      activeOrders.flatMap((o) =>
+        o.items
+          .filter((i) => isActiveSize(i.size))
+          .map(
+            (i) =>
+              [
+                i.variantId,
+                { id: i.variantId, sku: i.sku, color: i.color, size: i.size },
+              ] as const,
+          ),
+      ),
+    ).values(),
+  ];
+  const codes = [...new Set(variants.map((v) => v.sku))].sort((a, b) =>
+    a.localeCompare(b, "vi"),
+  );
+  const suppliers = [...new Set(activeOrders.map((o) => o.supplier))].sort(
+    (a, b) => a.localeCompare(b, "vi"),
+  );
+  const reload = async () => setHistory(await api("/api/incoming"));
   useEffect(() => {
     if (writable) void reload().catch((e) => setError(e.message));
   }, [writable]);
   useEffect(() => {
+    setPreview(null);
     setChecked(false);
   }, [data.orders]);
-  useEffect(() => {
-    setConsent(false);
-  }, [status?.providerId]);
-  function suggest(rows: IncomingRow[], rules = aliases) {
-    return rows.map((r) => {
-      const color = matchColor(r.sku, r.color, data.skus, rules).color;
-      const variant = data.skus.find(
-        (v) =>
-          normalizeLabel(v.sku) === normalizeLabel(r.sku) &&
-          v.color === color &&
-          v.size === r.size,
-      );
-      const variantId = r.variantId || variant?.id || null;
-      const candidates = incomingOrders(data.orders, variantId);
-      const pending = candidates.filter((o) =>
-        o.items.some((i) => i.variantId === variantId && i.qty > i.received),
-      );
-      const choices = pending.length ? pending : candidates;
-      return {
-        ...r,
-        variantId,
-        orderId: r.orderId || (choices.length === 1 ? choices[0].id : null),
-      };
-    });
-  }
   const act = async (fn: () => Promise<void>) => {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -111,38 +114,47 @@ export function IncomingGoods({
     } catch (e) {
       setError((e as Error).message);
     } finally {
-      inFlight.current = false;
       setBusy(false);
+      inFlight.current = false;
     }
   };
-  const load = async (id: string, rules = aliases) => {
-    const d = await api(`/api/incoming/${id}`);
-    setDraft(d);
-    setForm({
-      ...d.form,
-      rows: d.state === "draft" ? suggest(d.form.rows, rules) : d.form.rows,
-    });
-    setChecked(false);
-    setDirty(false);
-    setConsent(false);
-    setAngle(0);
-  };
-  const edit = (next: IncomingForm) => {
-    setForm(next);
+  const edit = (f: IncomingForm) => {
+    setForm(f);
     setDirty(true);
     setChecked(false);
+    setPreview(null);
   };
   const patch = (id: string, change: Partial<IncomingRow>) =>
     edit({
       ...form,
-      rows: form.rows.map((r) => (r.id === id ? { ...r, ...change } : r)),
+      rows: form.rows.map((r) =>
+        r.id === id ? { ...r, ...change, remember: false } : r,
+      ),
     });
+  const load = async (id: string) => {
+    const d = await api(`/api/incoming/${id}`);
+    setDraft(d);
+    setForm(
+      d.state === "draft"
+        ? {
+            ...d.form,
+            rows: d.form.rows.map((r: IncomingRow) => ({
+              ...r,
+              remember: false,
+            })),
+          }
+        : d.form,
+    );
+    setPreview(d.state === "confirmed" ? d.result?.allocation || null : null);
+    setDirty(false);
+    setChecked(false);
+    setAngle(0);
+    setZoom(100);
+    setImageIndex(0);
+  };
   const create = (withImages: boolean) =>
     act(async () => {
-      if (
-        dirty &&
-        !window.confirm("Bỏ các thay đổi chưa lưu để tạo phiếu mới?")
-      )
+      if (dirty && !window.confirm("Bỏ thay đổi chưa lưu để tạo phiếu khác?"))
         return;
       if (
         withImages &&
@@ -150,7 +162,7 @@ export function IncomingGoods({
           files.length > 4 ||
           files.reduce((n, f) => n + f.size, 0) > 8 * 1024 * 1024)
       )
-        throw Error("Chọn từ 1 đến 4 ảnh, tổng dung lượng tối đa 8 MB.");
+        throw Error("Chọn 1–4 ảnh, tổng dung lượng tối đa 8 MB");
       const images = withImages
         ? await Promise.all(
             files.map(async (f) => ({
@@ -159,104 +171,112 @@ export function IncomingGoods({
             })),
           )
         : [];
-      const d = await send("/api/incoming", { images });
-      await load(d.id);
+      const r = await send("/api/incoming", { images });
+      await load(r.id);
       await reload();
       setFiles([]);
       setMessage(
-        "Đã tạo phiếu nháp. Chưa ghi nhận hàng, chưa gửi ảnh ra dịch vụ ngoài.",
+        "Đã tạo phiếu. Xem ảnh và chọn mã–màu–size để nhập số lượng thực về.",
       );
     });
+  const validForm = () => {
+    const f = incomingFormSchema.safeParse(form);
+    if (!f.success)
+      throw Error(
+        "Điền ngày, mã, màu và số lượng nguyên từ 0 đến 1.000.000; mỗi phiếu cần ít nhất một dòng.",
+      );
+    return f.data;
+  };
   const save = () =>
     act(async () => {
-      const valid = incomingFormSchema.safeParse(form);
-      if (!valid.success)
-        throw Error(
-          "Điền mã, màu, ngày và ít nhất một dòng; số lượng phải là số nguyên 0–1.000.000 hoặc để trống chờ kiểm tra.",
-        );
       const r = await send(
         `/api/incoming/${draft.id}`,
-        { expectedVersion: draft.version, form: valid.data },
+        { expectedVersion: draft.version, form: validForm() },
         "PUT",
       );
       setDraft({ ...draft, version: r.version });
       setDirty(false);
-      await reload();
-      setMessage("Đã lưu nháp. Chưa tạo biên nhận.");
-    });
-  const read = () =>
-    act(async () => {
-      if (!consent)
-        throw Error(
-          `Cần đồng ý gửi ảnh đến ${status?.provider || "nhà cung cấp đã chọn"} trước khi đọc ảnh.`,
-        );
-      const r = await send(`/api/incoming/${draft.id}/read`, {
-        expectedVersion: draft.version,
-        consent: true,
-        provider: status?.providerId,
-      });
-      setDraft({ ...draft, version: r.version, ocr: r.ocr });
-      setForm({ ...r.form, rows: suggest(r.form.rows) });
-      setDirty(true);
+      setPreview(null);
       setChecked(false);
       await reload();
       setMessage(
-        "Đã đọc ảnh. Kiểm tra từng ô, chọn màu và lệnh trước khi xác nhận.",
+        "Đã lưu nháp. Chưa ghi nhận hàng; bấm Tự động cộng dồn lại khi cần xác nhận.",
+      );
+    });
+  const allocate = () =>
+    act(async () => {
+      const f = validForm();
+      if (f.rows.some((r) => (r.qty || 0) > 0 && !r.variantId))
+        throw Error(
+          "Chọn đúng mã–màu–size từ danh sách lệnh sản xuất cho các dòng có hàng",
+        );
+      const plan = await send(`/api/incoming/${draft.id}/allocate`, {
+        expectedVersion: draft.version,
+        form: f,
+      });
+      setPreview(plan);
+      setChecked(false);
+      setMessage(
+        plan.remaining
+          ? `Còn ${fmt(plan.remaining)} sản phẩm chưa phân bổ. Xem lý do bên dưới.`
+          : "Đã tính phân bổ dự kiến. Kiểm tra bảng rồi xác nhận để ghi nhận hàng.",
       );
     });
   const confirm = () =>
     act(async () => {
-      const valid = incomingFormSchema.safeParse(form);
-      if (!valid.success)
-        throw Error(
-          "Kiểm tra mã, màu, ngày và số lượng hợp lệ trước khi xác nhận.",
-        );
+      const f = validForm();
       if (!checked)
-        throw Error("Đánh dấu đã kiểm tra ảnh, số lượng và phân bổ lệnh.");
-      if (form.rows.some((r) => r.qty === null))
+        throw Error("Cần xác nhận đã kiểm tra số lượng và phân bổ lệnh");
+      const positive = f.rows.filter((r) => (r.qty || 0) > 0);
+      const auto = positive.some((r) => r.allocationMode === "auto");
+      if (
+        f.rows.some((r) => r.qty === null) ||
+        !positive.length ||
+        positive.some((r) => !r.variantId)
+      )
+        throw Error("Kiểm tra số lượng và chọn đúng mã–màu–size");
+      if (auto && (!preview?.id || preview.remaining))
         throw Error(
-          "Còn ô số lượng trống; nhập 0 nếu đã kiểm tra thực tế không có hàng.",
+          "Bấm Tự động cộng dồn và xử lý hết hàng chưa phân bổ trước khi xác nhận",
         );
-      const positive = form.rows.filter((r) => r.qty! > 0);
-      if (!positive.length || positive.some((r) => !r.variantId || !r.orderId))
-        throw Error("Chọn đúng màu danh mục và lệnh cho tất cả dòng có hàng.");
-      const ids = [...new Set(positive.map((r) => r.orderId!))].sort();
-      const orders = ids.map((id) => {
-        const o = data.orders.find((o) => o.id === id);
-        if (!o) throw Error("Lệnh không còn trong danh sách; tải lại dữ liệu.");
-        return { id, version: o.version };
-      });
+      const ids = [...new Set(positive.map((r) => r.orderId))].sort();
+      const orders = auto
+        ? preview!.orders
+        : ids.map((id) => {
+            const o = data.orders.find((o) => o.id === id);
+            if (!o) throw Error("Chọn lệnh nhận cho tất cả dòng có hàng");
+            return { id: o.id, version: o.version };
+          });
       const body = {
         expectedVersion: draft.version,
-        form: valid.data,
+        form: f,
         checked: true,
         orders,
+        ...(auto ? { allocationPreviewId: preview!.id } : {}),
       };
       const ok = await run(async () => {
         const result = await send(`/api/incoming/${draft.id}/confirm`, body);
         setDraft({ ...draft, state: "confirmed", result });
+        setPreview(result.allocation || null);
         setDirty(false);
         setChecked(false);
-      }, "Đã ghi nhận phiếu hàng về; tồn kho không thay đổi");
+      }, "Đã ghi nhận hàng vào các lệnh; tồn kho không thay đổi");
       if (ok) {
         await reload();
-        setMessage("Đã ghi nhận hàng. Phiếu và biên nhận được lưu tập trung.");
+        setMessage(
+          "Đã ghi nhận thành công. Mở lệnh để xem số đã nhận, còn thiếu và tiến độ.",
+        );
       }
     });
   const viewOrder = (id: string) =>
     void act(async () => {
       if (dirty && draft?.state === "draft") {
-        const valid = incomingFormSchema.safeParse(form);
-        if (!valid.success)
-          throw Error(
-            "Lưu nháp hoặc sửa các trường chưa hợp lệ trước khi mở lệnh.",
-          );
-        const result = await send(
+        const r = await send(
           `/api/incoming/${draft.id}`,
-          { expectedVersion: draft.version, form: valid.data },
+          { expectedVersion: draft.version, form: validForm() },
           "PUT",
         );
-        setDraft({ ...draft, version: result.version });
+        setDraft({ ...draft, version: r.version });
         setDirty(false);
       }
       onOrder(id);
@@ -266,17 +286,22 @@ export function IncomingGoods({
       <>
         <h1>Nhập liệu hàng về</h1>
         <Notice>
-          Cần vai trò Warehouse Operator hoặc Administrator để đọc phiếu và ghi
-          nhận hàng. Không tự cấp quyền cho tài khoản hiện tại.
+          Cần vai trò Administrator hoặc Warehouse Operator để nhập và ghi nhận
+          hàng.
         </Notice>
       </>
     );
   const locked = busy || draft?.state === "confirmed";
-  const quantity = form.rows.reduce((n, r) => n + (r.qty || 0), 0),
-    unknown = form.rows.filter((r) => r.qty === null).length;
-  const unresolved = form.rows.filter(
-    (r) => r.qty! > 0 && (!r.variantId || !r.orderId),
-  ).length;
+  const positive = form.rows.filter((r) => (r.qty || 0) > 0),
+    auto = positive.some((r) => r.allocationMode === "auto");
+  const unknown = form.rows.filter((r) => r.qty === null).length,
+    unmatched = positive.filter(
+      (r) => !r.variantId || (r.allocationMode !== "auto" && !r.orderId),
+    ).length;
+  const total = form.rows.reduce((n, r) => n + (r.qty || 0), 0);
+  const photo = draft?.images?.[imageIndex];
+  const displayedPreview =
+    draft?.state === "confirmed" ? draft.result?.allocation : preview;
   return (
     <div className="incoming-page">
       <div className="page-heading">
@@ -284,8 +309,8 @@ export function IncomingGoods({
           <div className="eyebrow">TIẾP NHẬN THÀNH PHẨM</div>
           <h1>Nhập liệu hàng về</h1>
           <p>
-            Ảnh phiếu kiểm → kiểm tra & ánh xạ → phân bổ lệnh → ghi nhận đợt
-            giao.
+            Xem phiếu kiểm, nhập số lượng thực về và phân bổ vào các lệnh sản
+            xuất.
           </p>
         </div>
       </div>
@@ -299,562 +324,719 @@ export function IncomingGoods({
           {message}
         </div>
       )}
-      <section className="card incoming-panel">
-        <h2>1. Tạo phiếu nhập</h2>
+      <section className="incoming-panel">
+        <h2>1. Ảnh phiếu kiểm</h2>
         <Field label="Ảnh phiếu kiểm kho">
           <input
             type="file"
-            accept="image/jpeg,image/png,image/webp"
             multiple
+            accept="image/jpeg,image/png,image/webp"
             disabled={busy}
             onChange={(e) => setFiles(Array.from(e.target.files || []))}
           />
         </Field>
         <p>
-          Tối đa 4 ảnh / 8 MB. Chụp rõ, đủ bốn góc. JPG, PNG, WebP; ảnh không
-          được dùng làm số liệu thật trước khi xác nhận.
+          Tối đa 4 ảnh / 8 MB. Ảnh được giữ để đối chiếu cùng bảng nhập tay.
         </p>
         <div className="actions">
           <button
-            disabled={busy || !files.length}
             className="primary"
+            disabled={busy || !files.length}
             onClick={() => void create(true)}
           >
             Tạo phiếu từ ảnh{files.length ? ` (${files.length})` : ""}
           </button>
           <button disabled={busy} onClick={() => void create(false)}>
-            Nhập bảng thủ công
+            Nhập bảng không kèm ảnh
           </button>
         </div>
-        {status && !status.configured && (
-          <Notice>
-            Chưa cấu hình dịch vụ đọc ảnh. Có thể lưu ảnh và nhập bảng thủ công
-            ngay.
-            {status.configurationError ||
-              ` Administrator cần bổ sung ${status.keyVariable} trong backend để bật ${status.provider}.`}
-            {status.providerId === "openai" &&
-              " Nếu dùng Gemini: đặt INCOMING_OCR_PROVIDER=gemini và GEMINI_API_KEY trong Railway rồi Deploy lại."}
-          </Notice>
-        )}
       </section>
       {draft && (
-        <>
-          <section className="card incoming-panel">
-            <h2>2. Kiểm tra và ánh xạ dữ liệu</h2>
-            <p>
-              Mã phiếu: {draft.id} ·{" "}
-              {draft.state === "confirmed" ? "Đã ghi nhận — chỉ xem" : "Nháp"}
-              {dirty ? " · Có thay đổi chưa lưu" : ""}
-            </p>
-            {!!draft.images?.length && (
-              <button disabled={busy} onClick={() => setShowSource((v) => !v)}>
-                {showSource
-                  ? "Ẩn ảnh để mở rộng bảng"
-                  : "Hiện ảnh để đối chiếu"}
-              </button>
-            )}
-            <div
-              className={`incoming-workspace ${!showSource || !draft.images?.length ? "incoming-wide" : ""}`}
-            >
-              <div className="incoming-images">
-                {draft.images?.length > 0 ? (
-                  <>
-                    <button
-                      onClick={() => setAngle((a) => (a + 90) % 360)}
-                      disabled={busy}
+        <section className="incoming-panel">
+          <h2>2. Nhập hàng và chọn cách cộng vào lệnh</h2>
+          <p>
+            Phiếu {draft.id.slice(0, 8)} ·{" "}
+            {draft.state === "confirmed" ? "Đã ghi nhận — chỉ xem" : "Nháp"}
+            {dirty ? " · Chưa lưu thay đổi" : ""}
+          </p>
+          {!!draft.images?.length && (
+            <button disabled={busy} onClick={() => setShowSource((v) => !v)}>
+              {showSource ? "Ẩn ảnh để mở rộng bảng" : "Hiện ảnh để đối chiếu"}
+            </button>
+          )}
+          <div
+            className={`incoming-workspace ${!showSource || !draft.images?.length ? "incoming-wide" : ""}`}
+          >
+            <div className="incoming-images">
+              {photo && (
+                <>
+                  <Field label="Chọn ảnh phiếu">
+                    <select
+                      value={imageIndex}
+                      onChange={(e) => {
+                        setImageIndex(Number(e.target.value));
+                        setAngle(0);
+                        setZoom(100);
+                      }}
                     >
+                      {draft.images.map((i: any, n: number) => (
+                        <option key={i.id} value={n}>
+                          {n + 1}. {i.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <div className="actions">
+                    <button onClick={() => setAngle((a) => (a + 90) % 360)}>
                       Xoay ảnh 90°
                     </button>
-                    {draft.images.map((i: any) => (
-                      <figure key={i.id}>
-                        <div className="incoming-image-frame">
-                          <img
-                            style={{ transform: `rotate(${angle}deg)` }}
-                            src={`/api/incoming/${draft.id}/images/${i.id}`}
-                            alt={i.name}
-                          />
-                        </div>
-                        <figcaption>
-                          {i.name} ·{" "}
-                          <a
-                            href={`/api/incoming/${draft.id}/images/${i.id}`}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            Mở ảnh gốc
-                          </a>
-                        </figcaption>
-                      </figure>
-                    ))}
-                  </>
-                ) : (
-                  <Notice>
-                    Phiếu nhập bảng thủ công, chưa có ảnh đính kèm.
-                  </Notice>
-                )}
-                {draft.state === "draft" && draft.images?.length > 0 && (
-                  <div className="incoming-ocr">
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={consent}
-                        disabled={busy}
-                        onChange={(e) => setConsent(e.target.checked)}
-                      />{" "}
-                      Tôi đồng ý gửi ảnh phiếu này đến{" "}
-                      {status?.provider || "nhà cung cấp đã chọn"} để nhận dạng
-                      (theo phí và hạn mức API của nhà cung cấp).
-                    </label>
                     <button
-                      disabled={
-                        busy ||
-                        !consent ||
-                        !status?.configured ||
-                        form.rows.length > 0
-                      }
-                      onClick={() => void read()}
+                      disabled={zoom <= 50}
+                      onClick={() => setZoom((z) => Math.max(50, z - 25))}
                     >
-                      Đọc ảnh & tạo bảng
+                      Thu nhỏ
                     </button>
-                    <p>
-                      Không đọc lại đè lên bảng đã có. Kết quả viết tay luôn cần
-                      người kiểm tra.
-                    </p>
+                    <button
+                      disabled={zoom >= 300}
+                      onClick={() => setZoom((z) => Math.min(300, z + 25))}
+                    >
+                      Phóng to
+                    </button>
+                    <span>{zoom}%</span>
                   </div>
-                )}
-                {draft.ocr?.warnings?.map((w: string, i: number) => (
-                  <Notice key={i}>{w}</Notice>
-                ))}
-              </div>
-              <div className="incoming-editor">
-                <div className="form-grid">
-                  <Field label="Ngày nhận hàng">
-                    <input
-                      type="date"
-                      value={form.date}
-                      disabled={locked}
-                      onChange={(e) => edit({ ...form, date: e.target.value })}
-                    />
-                  </Field>
-                  <Field label="Ghi chú phiếu">
-                    <textarea
-                      value={form.note}
-                      disabled={locked}
-                      onChange={(e) => edit({ ...form, note: e.target.value })}
-                    />
-                  </Field>
-                </div>
-                <div className="incoming-metrics">
-                  <span>
-                    <b>{fmt(quantity)}</b> sản phẩm đang nhập
-                  </span>
-                  <span>
-                    <b>{unknown}</b> ô chưa kiểm tra
-                  </span>
-                  <span>
-                    <b>{unresolved}</b> dòng chưa khớp
-                  </span>
-                </div>
-                {draft.ocr && !draft.ocr.date && (
-                  <Notice>
-                    Ảnh chưa nhận diện được ngày nhận. Ngày trên biểu mẫu đang
-                    dùng ngày tạo phiếu; vui lòng sửa theo chứng từ thực tế.
-                  </Notice>
-                )}
-                {draft.ocr && (
+                  <div className="incoming-photo-scroll">
+                    <div
+                      className="incoming-photo-canvas"
+                      style={{
+                        width: `${zoom}%`,
+                        aspectRatio: angle % 180 ? 1 / photoRatio : photoRatio,
+                      }}
+                    >
+                      <img
+                        key={photo.id}
+                        src={`/api/incoming/${draft.id}/images/${photo.id}`}
+                        alt={photo.name}
+                        onLoad={(e) =>
+                          setPhotoRatio(
+                            e.currentTarget.naturalWidth /
+                              e.currentTarget.naturalHeight || 1,
+                          )
+                        }
+                        style={{
+                          width: `${angle % 180 ? photoRatio * 100 : 100}%`,
+                          transform: `translate(-50%, -50%) rotate(${angle}deg)`,
+                        }}
+                      />
+                    </div>
+                  </div>
                   <p>
-                    Tổng các ô đọc được ban đầu:{" "}
-                    {fmt(
-                      draft.ocr.rows.reduce(
-                        (n: number, r: any) =>
-                          n + sizes.reduce((s, k) => s + (r[k] || 0), 0),
-                        0,
-                      ),
-                    )}
-                    . Tổng hiện tại ở trên phản ánh số đã sửa/phân bổ.
+                    <a
+                      href={`/api/incoming/${draft.id}/images/${photo.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Mở ảnh gốc ở cửa sổ riêng
+                    </a>
                   </p>
-                )}
-                <div className="actions">
-                  <button
+                </>
+              )}
+            </div>
+            <div className="incoming-editor">
+              <div className="form-grid">
+                <Field label="Ngày nhận hàng">
+                  <input
+                    type="date"
+                    value={form.date}
                     disabled={locked}
-                    onClick={() =>
-                      edit({ ...form, rows: [...form.rows, emptyRow()] })
+                    onChange={(e) => edit({ ...form, date: e.target.value })}
+                  />
+                </Field>
+                <Field label="Nhà xưởng trả hàng">
+                  <select
+                    value={form.supplier || ""}
+                    disabled={locked}
+                    onChange={(e) =>
+                      edit({
+                        ...form,
+                        supplier: e.target.value,
+                        rows: form.rows.map((r) => ({
+                          ...r,
+                          orderId: null,
+                          excessOrderId: null,
+                        })),
+                      })
                     }
                   >
-                    Thêm dòng hàng
-                  </button>
-                  <button
-                    disabled={locked || !form.rows.length}
-                    onClick={() => {
-                      edit({ ...form, rows: suggest(form.rows) });
-                    }}
-                  >
-                    Gợi ý ánh xạ lại
-                  </button>
-                  <button
-                    disabled={locked || !unknown}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          "Chỉ tiếp tục nếu đã kiểm tra ảnh và xác định mọi ô trống thực tế là 0. Điền 0 cho tất cả ô số lượng còn trống?",
-                        )
-                      )
-                        edit({
-                          ...form,
-                          rows: form.rows.map((r) => ({
-                            ...r,
-                            qty: r.qty ?? 0,
-                          })),
-                        });
-                    }}
-                  >
-                    Điền 0 ô trống đã kiểm tra
-                  </button>
-                </div>
-                <p>
-                  Bảng có thể cuộn ngang để chọn lệnh và thao tác. Ô chưa đọc rõ
-                  để trống; chỉ điền 0 sau khi kiểm tra. Một SKU thuộc nhiều
-                  lệnh: dùng “Tách dòng” và chia số lượng, không nhân đôi sản
-                  lượng.
-                </p>
-                <div className="table-scroll">
-                  <table className="incoming-table">
-                    <thead>
-                      <tr>
-                        {[
-                          "Bao",
-                          "Mã trên phiếu",
-                          "Màu viết trên phiếu",
-                          "Size",
-                          "Số nhận",
-                          "Màu danh mục",
-                          "Lệnh nhận",
-                          "Quy ước",
-                          "Thao tác",
-                        ].map((t) => (
-                          <th key={t}>{t}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {form.rows.map((r, index) => {
-                        const productVariants = data.skus.filter(
+                    <option value="">
+                      Chưa chọn — tự khớp khi chỉ có một xưởng
+                    </option>
+                    {suppliers.map((s) => (
+                      <option key={s}>{s}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Ghi chú phiếu">
+                  <textarea
+                    value={form.note}
+                    disabled={locked}
+                    onChange={(e) => edit({ ...form, note: e.target.value })}
+                  />
+                </Field>
+              </div>
+              <div className="incoming-metrics">
+                <span>
+                  <b>{fmt(total)}</b> sản phẩm thực về
+                </span>
+                <span>
+                  <b>{unknown}</b> ô chưa nhập
+                </span>
+                <span>
+                  <b>{unmatched}</b> dòng chưa chọn đủ
+                </span>
+              </div>
+              <div className="actions">
+                <button
+                  disabled={locked}
+                  onClick={() =>
+                    edit({ ...form, rows: [...form.rows, emptyRow()] })
+                  }
+                >
+                  Thêm dòng hàng
+                </button>
+                <button
+                  disabled={locked || !form.rows.length}
+                  onClick={() =>
+                    edit({
+                      ...form,
+                      rows: form.rows.map((r) => ({
+                        ...r,
+                        allocationMode: "auto",
+                        orderId: null,
+                      })),
+                    })
+                  }
+                >
+                  Chọn tự động cộng dồn tất cả
+                </button>
+              </div>
+              <p>
+                Mã và màu lấy từ các lệnh sản xuất đang lưu. Đổi mã sẽ cập nhật
+                danh sách màu tương ứng. Bảng có thể cuộn ngang.
+              </p>
+              <div className="table-scroll">
+                <table className="incoming-table">
+                  <thead>
+                    <tr>
+                      {[
+                        "Bao",
+                        "Mã trên phiếu",
+                        "Màu trên phiếu",
+                        "Size",
+                        "Số nhận",
+                        "Lệnh nhận",
+                        "Lệnh nhận phần dư (nếu có)",
+                        "Thao tác",
+                      ].map((t) => (
+                        <th key={t}>{t}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {form.rows.map((r, index) => {
+                      const colors = [
+                        ...new Set(
+                          variants
+                            .filter((v) => v.sku === r.sku)
+                            .map((v) => v.color),
+                        ),
+                      ].sort((a, b) => a.localeCompare(b, "vi"));
+                      const candidateSizes = variants
+                        .filter((v) => v.sku === r.sku && v.color === r.color)
+                        .map((v) => v.size);
+                      const options = incomingOrders(
+                        data.orders,
+                        r.variantId,
+                      ).filter(
+                        (o) => !form.supplier || o.supplier === form.supplier,
+                      );
+                      const pick = (
+                        sku: string,
+                        color: string,
+                        size: IncomingRow["size"],
+                      ) => {
+                        const v = variants.find(
                           (v) =>
-                            normalizeLabel(v.sku) === normalizeLabel(r.sku) &&
-                            v.size === r.size,
+                            v.sku === sku &&
+                            v.color === color &&
+                            v.size === size,
                         );
-                        const chosen = data.skus.find(
-                          (v) => v.id === r.variantId,
-                        );
-                        const candidates = incomingOrders(
-                          data.orders,
-                          r.variantId,
-                        );
-                        const suggestion = matchColor(
-                          r.sku,
-                          r.color,
-                          data.skus,
-                          aliases,
-                        );
-                        return (
-                          <tr
-                            key={r.id}
-                            className={
-                              r.qty === null ||
-                              ((r.qty || 0) > 0 && (!r.variantId || !r.orderId))
-                                ? "incoming-unresolved"
-                                : ""
-                            }
-                          >
-                            <td>
-                              <input
-                                aria-label={`Bao dòng ${index + 1}`}
-                                value={r.bag}
-                                disabled={locked}
-                                onChange={(e) =>
-                                  patch(r.id, { bag: e.target.value })
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                aria-label={`Mã dòng ${index + 1}`}
-                                list="incoming-codes"
-                                value={r.sku}
-                                disabled={locked}
-                                onChange={(e) =>
-                                  patch(r.id, {
-                                    sku: e.target.value,
-                                    variantId: null,
-                                    orderId: null,
-                                  })
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                aria-label={`Màu phiếu dòng ${index + 1}`}
-                                value={r.color}
-                                disabled={locked}
-                                onChange={(e) =>
-                                  patch(r.id, {
-                                    color: e.target.value,
-                                    variantId: null,
-                                    orderId: null,
-                                  })
-                                }
-                              />
-                              <small>{suggestion.source}</small>
-                            </td>
-                            <td>
-                              <select
-                                aria-label={`Size dòng ${index + 1}`}
-                                value={r.size}
-                                disabled={locked}
-                                onChange={(e) =>
-                                  patch(r.id, {
-                                    size: e.target.value as IncomingRow["size"],
-                                    variantId: null,
-                                    orderId: null,
-                                  })
-                                }
-                              >
-                                {sizes.map((s) => (
-                                  <option key={s}>{s}</option>
-                                ))}
-                              </select>
-                            </td>
-                            <td>
-                              <input
-                                aria-label={`Số nhận dòng ${index + 1}`}
-                                type="number"
-                                min="0"
-                                max="1000000"
-                                step="1"
-                                placeholder="Kiểm tra"
-                                value={r.qty ?? ""}
-                                disabled={locked}
-                                onChange={(e) =>
-                                  patch(r.id, {
-                                    qty:
-                                      e.target.value === ""
-                                        ? null
-                                        : Number(e.target.value),
-                                  })
-                                }
-                              />
-                            </td>
-                            <td>
-                              <select
-                                aria-label={`Màu danh mục dòng ${index + 1}`}
-                                value={r.variantId || ""}
-                                disabled={locked}
-                                onChange={(e) => {
-                                  const variantId = e.target.value || null;
-                                  const options = incomingOrders(
-                                    data.orders,
-                                    variantId,
-                                  );
-                                  patch(r.id, {
-                                    variantId,
-                                    orderId:
-                                      options.length === 1
-                                        ? options[0].id
-                                        : null,
-                                  });
-                                }}
-                              >
-                                <option value="">
-                                  Chọn màu / chưa tìm thấy
+                        patch(r.id, {
+                          sku,
+                          color,
+                          size,
+                          variantId: v?.id || null,
+                          orderId: null,
+                          excessOrderId: null,
+                        });
+                      };
+                      return (
+                        <tr
+                          key={r.id}
+                          className={
+                            r.qty === null ||
+                            ((r.qty || 0) > 0 &&
+                              (!r.variantId ||
+                                (r.allocationMode !== "auto" && !r.orderId)))
+                              ? "incoming-unresolved"
+                              : ""
+                          }
+                        >
+                          <td>
+                            <input
+                              aria-label={`Bao dòng ${index + 1}`}
+                              value={r.bag}
+                              disabled={locked}
+                              onChange={(e) =>
+                                patch(r.id, { bag: e.target.value })
+                              }
+                            />
+                          </td>
+                          <td>
+                            <select
+                              aria-label={`Mã dòng ${index + 1}`}
+                              value={r.sku}
+                              disabled={locked}
+                              onChange={(e) => pick(e.target.value, "", r.size)}
+                            >
+                              <option value="">Chọn mã sản phẩm</option>
+                              {r.sku && !codes.includes(r.sku) && (
+                                <option value={r.sku}>
+                                  {r.sku} — chọn lại từ danh mục
                                 </option>
-                                {productVariants.map((v) => (
-                                  <option key={v.id} value={v.id}>
-                                    {v.color}
-                                  </option>
-                                ))}
-                              </select>
-                              {chosen && (
-                                <small>
-                                  Đã chọn: {chosen.sku} · {chosen.color} ·{" "}
-                                  {chosen.size}
-                                </small>
                               )}
-                            </td>
-                            <td>
+                              {codes.map((c) => (
+                                <option key={c}>{c}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <select
+                              aria-label={`Màu dòng ${index + 1}`}
+                              value={r.color}
+                              disabled={locked || !r.sku}
+                              onChange={(e) => {
+                                const color = e.target.value;
+                                const valid = variants.filter(
+                                  (v) => v.sku === r.sku && v.color === color,
+                                );
+                                const size = valid.some(
+                                  (v) => v.size === r.size,
+                                )
+                                  ? r.size
+                                  : sizes.find((s) =>
+                                      valid.some((v) => v.size === s),
+                                    ) || r.size;
+                                pick(r.sku, color, size);
+                              }}
+                            >
+                              <option value="">Chọn màu của mã</option>
+                              {r.color && !colors.includes(r.color) && (
+                                <option value={r.color}>
+                                  {r.color} — chọn lại màu chuẩn
+                                </option>
+                              )}
+                              {colors.map((c) => (
+                                <option key={c}>{c}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <select
+                              aria-label={`Size dòng ${index + 1}`}
+                              value={r.size}
+                              disabled={locked}
+                              onChange={(e) =>
+                                pick(
+                                  r.sku,
+                                  r.color,
+                                  e.target.value as IncomingRow["size"],
+                                )
+                              }
+                            >
+                              {sizes.map((s) => (
+                                <option
+                                  key={s}
+                                  disabled={
+                                    !!r.color && !candidateSizes.includes(s)
+                                  }
+                                >
+                                  {s}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <input
+                              aria-label={`Số nhận dòng ${index + 1}`}
+                              type="number"
+                              min="0"
+                              max="1000000"
+                              step="1"
+                              value={r.qty ?? ""}
+                              placeholder="Nhập SL"
+                              disabled={locked}
+                              onChange={(e) =>
+                                patch(r.id, {
+                                  qty:
+                                    e.target.value === ""
+                                      ? null
+                                      : Number(e.target.value),
+                                })
+                              }
+                            />
+                          </td>
+                          <td>
+                            <select
+                              aria-label={`Lệnh dòng ${index + 1}`}
+                              value={
+                                r.allocationMode === "auto"
+                                  ? "auto"
+                                  : r.orderId || ""
+                              }
+                              disabled={locked}
+                              onChange={(e) =>
+                                patch(r.id, {
+                                  allocationMode:
+                                    e.target.value === "auto"
+                                      ? "auto"
+                                      : "manual",
+                                  orderId:
+                                    e.target.value === "auto"
+                                      ? null
+                                      : e.target.value || null,
+                                  excessOrderId: null,
+                                })
+                              }
+                            >
+                              <option value="">Chọn lệnh thủ công</option>
+                              <option value="auto">Tự động cộng dồn</option>
+                              {options.map((o) => {
+                                const i = o.items.find(
+                                  (i) => i.variantId === r.variantId,
+                                )!;
+                                return (
+                                  <option key={o.id} value={o.id}>
+                                    {o.code} · {o.supplier} · còn{" "}
+                                    {Math.max(0, i.qty - i.received)} ·{" "}
+                                    {totals(o).status}
+                                  </option>
+                                );
+                              })}
+                            </select>
+                            {r.orderId && (
+                              <button onClick={() => viewOrder(r.orderId!)}>
+                                Xem lệnh
+                              </button>
+                            )}
+                          </td>
+                          <td>
+                            {r.allocationMode === "auto" ? (
                               <select
-                                aria-label={`Lệnh dòng ${index + 1}`}
-                                value={r.orderId || ""}
+                                aria-label={`Lệnh nhận dư dòng ${index + 1}`}
+                                value={r.excessOrderId || ""}
                                 disabled={locked}
                                 onChange={(e) =>
                                   patch(r.id, {
-                                    orderId: e.target.value || null,
+                                    excessOrderId: e.target.value || null,
                                   })
                                 }
                               >
-                                <option value="">Chọn lệnh nhận</option>
-                                {candidates.map((o) => {
-                                  const i = o.items.find(
-                                    (i) => i.variantId === r.variantId,
-                                  )!;
-                                  return (
+                                <option value="">Không tự gán hàng dư</option>
+                                {options
+                                  .filter(
+                                    (o) =>
+                                      (form.includeDrafts ||
+                                        o.status !== "Nháp") &&
+                                      (form.includePaused ||
+                                        o.status !== "Tạm dừng"),
+                                  )
+                                  .map((o) => (
                                     <option key={o.id} value={o.id}>
-                                      {o.code} · {o.supplier} · còn{" "}
-                                      {Math.max(0, i.qty - i.received)} ·{" "}
-                                      {totals(o).status}
+                                      {o.code} · {o.supplier}
                                     </option>
-                                  );
-                                })}
+                                  ))}
                               </select>
-                              {r.orderId && (
-                                <button
-                                  className="link"
-                                  onClick={() => viewOrder(r.orderId!)}
-                                >
-                                  Xem lệnh
-                                </button>
-                              )}
-                            </td>
-                            <td>
-                              <label>
-                                <input
-                                  type="checkbox"
-                                  aria-label={`Ghi nhớ dòng ${index + 1}`}
-                                  checked={r.remember}
-                                  disabled={locked || !r.variantId}
-                                  onChange={(e) =>
-                                    patch(r.id, { remember: e.target.checked })
-                                  }
-                                />{" "}
-                                Ghi nhớ theo mã
-                              </label>
-                            </td>
-                            <td>
-                              <button
-                                disabled={locked}
-                                onClick={() =>
-                                  edit({
-                                    ...form,
-                                    rows: [
-                                      ...form.rows,
-                                      {
-                                        ...r,
-                                        id: crypto.randomUUID(),
-                                        qty: 0,
-                                        orderId: null,
-                                      },
-                                    ],
-                                  })
-                                }
-                              >
-                                Tách dòng
-                              </button>
-                              <button
-                                disabled={locked}
-                                onClick={() =>
-                                  edit({
-                                    ...form,
-                                    rows: form.rows.filter(
-                                      (x) => x.id !== r.id,
-                                    ),
-                                  })
-                                }
-                              >
-                                Bỏ dòng
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-                <datalist id="incoming-codes">
-                  {[...new Set(data.skus.map((v) => v.sku))].map((c) => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
-                {!form.rows.length && (
-                  <Notice>
-                    Đọc ảnh để tạo bảng, hoặc bấm Thêm dòng hàng để nhập thủ
-                    công.
-                  </Notice>
-                )}
-                {draft.state === "draft" && (
-                  <div className="incoming-confirm">
-                    <Notice>
-                      Cho nhận vượt số đặt. Không tự cộng tồn kho. Xác nhận sẽ
-                      tạo biên nhận cho tất cả lệnh đã chọn trong một giao dịch;
-                      lỗi một lệnh sẽ không ghi một phần.
-                    </Notice>
+                            ) : (
+                              "—"
+                            )}
+                          </td>
+                          <td>
+                            <button
+                              disabled={locked}
+                              onClick={() =>
+                                edit({
+                                  ...form,
+                                  rows: [
+                                    ...form.rows,
+                                    {
+                                      ...r,
+                                      id: crypto.randomUUID(),
+                                      qty: null,
+                                      orderId: null,
+                                      allocationMode: "auto",
+                                      excessOrderId: null,
+                                      remember: false,
+                                    },
+                                  ],
+                                })
+                              }
+                            >
+                              Thêm size / dòng tương tự
+                            </button>
+                            <button
+                              disabled={locked}
+                              onClick={() =>
+                                edit({
+                                  ...form,
+                                  rows: form.rows.filter((x) => x.id !== r.id),
+                                })
+                              }
+                            >
+                              Bỏ dòng
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {!form.rows.length && (
+                <Notice>
+                  Bấm Thêm dòng hàng, chọn mã–màu–size rồi nhập số lượng từ
+                  phiếu kiểm.
+                </Notice>
+              )}
+              {draft.state === "draft" && (
+                <div className="incoming-confirm">
+                  <div className="actions">
                     <label>
                       <input
                         type="checkbox"
-                        checked={checked}
+                        checked={!!form.includeDrafts}
                         disabled={busy}
-                        onChange={(e) => setChecked(e.target.checked)}
-                      />{" "}
-                      Tôi đã đối chiếu ảnh, mã, màu, size, ngày, số lượng và
-                      phân bổ lệnh; đã sửa các ô không rõ.
-                    </label>
-                    <div className="actions">
-                      <button
-                        disabled={busy || !form.rows.length}
-                        onClick={() => void save()}
-                      >
-                        Lưu nháp
-                      </button>
-                      <button
-                        className="primary"
-                        disabled={
-                          busy ||
-                          !checked ||
-                          !form.rows.length ||
-                          !!unknown ||
-                          !!unresolved
+                        onChange={(e) =>
+                          edit({ ...form, includeDrafts: e.target.checked })
                         }
-                        onClick={() => void confirm()}
-                      >
-                        Xác nhận ghi nhận hàng
-                      </button>
-                    </div>
+                      />{" "}
+                      Cho phép cộng vào lệnh Nháp
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={!!form.includePaused}
+                        disabled={busy}
+                        onChange={(e) =>
+                          edit({ ...form, includePaused: e.target.checked })
+                        }
+                      />{" "}
+                      Cho phép cộng vào lệnh Tạm dừng
+                    </label>
                   </div>
-                )}
-                {draft.result && (
-                  <div className="notice">
-                    <div>
-                      <strong>
-                        Đã nhận {fmt(draft.result.received)} sản phẩm
-                      </strong>
-                      {draft.result.receipts.map((r: any) => (
-                        <p key={r.receiptId}>
-                          <button onClick={() => viewOrder(r.orderId)}>
-                            {r.code} · {fmt(r.received)} sản phẩm · Xem lệnh
-                          </button>
-                        </p>
-                      ))}
-                    </div>
+                  <button
+                    className="primary"
+                    disabled={
+                      busy ||
+                      !positive.length ||
+                      !!unknown ||
+                      positive.some((r) => !r.variantId)
+                    }
+                    onClick={() => void allocate()}
+                  >
+                    Tự động cộng dồn — xem phân bổ
+                  </button>
+                  <Notice>
+                    Ưu tiên ngày lập lệnh cũ trước; chỉ cộng đúng mã–màu–size,
+                    trừ số đã nhận. Lệnh xóa/hủy không được nhận; Nháp/Tạm dừng
+                    chỉ tham gia tự động khi bật ở trên. Phân bổ là xem trước,
+                    chưa ghi nhận hàng.
+                  </Notice>
+                </div>
+              )}
+              {displayedPreview && (
+                <section className="incoming-allocation">
+                  <h3>
+                    {draft.state === "confirmed"
+                      ? "Phân bổ đã ghi nhận"
+                      : "Phân bổ dự kiến — chưa ghi nhận"}
+                  </h3>
+                  <div className="incoming-metrics">
+                    <span>
+                      <b>{fmt(displayedPreview.allocated)}</b> đã phân bổ
+                    </span>
+                    <span>
+                      <b>{fmt(displayedPreview.remaining)}</b> chưa phân bổ
+                    </span>
+                    <span>
+                      <b>{fmt(displayedPreview.excess)}</b> giao dư đã chọn lệnh
+                    </span>
                   </div>
-                )}
-              </div>
+                  <div className="table-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          {[
+                            "Lệnh",
+                            "Mã",
+                            "Màu",
+                            "Size",
+                            "Còn thiếu trước",
+                            "Nhận phiếu này",
+                            "Còn thiếu sau",
+                            "Giao dư",
+                          ].map((t) => (
+                            <th key={t}>{t}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {displayedPreview.allocations.map(
+                          (a: any, i: number) => (
+                            <tr key={i}>
+                              <td>
+                                <button
+                                  disabled={busy}
+                                  onClick={() => viewOrder(a.orderId)}
+                                >
+                                  {a.code}
+                                </button>
+                              </td>
+                              <td>{a.sku}</td>
+                              <td>{a.color}</td>
+                              <td>{a.size}</td>
+                              <td>{fmt(a.pendingBefore)}</td>
+                              <td>{fmt(a.qty)}</td>
+                              <td>{fmt(a.pendingAfter)}</td>
+                              <td>{fmt(a.excess)}</td>
+                            </tr>
+                          ),
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                  {!!displayedPreview.balances?.length && (
+                    <>
+                      <h4>Còn thiếu theo mã–màu–size sau phiếu này</h4>
+                      <p>
+                        Tính cả lệnh phù hợp chưa cần phân bổ, theo xưởng và tùy
+                        chọn Nháp/Tạm dừng đang chọn.
+                      </p>
+                      <div className="table-scroll">
+                        <table className="incoming-balances">
+                          <thead>
+                            <tr>
+                              <th>Mã</th>
+                              <th>Màu</th>
+                              <th>Size</th>
+                              <th>Tổng thiếu trước</th>
+                              <th>Nhận phiếu này</th>
+                              <th>Tổng còn thiếu sau</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {displayedPreview.balances.map((b: any) => (
+                              <tr key={b.variantId}>
+                                <td>{b.sku}</td>
+                                <td>{b.color}</td>
+                                <td>{b.size}</td>
+                                <td>{fmt(b.pendingBefore)}</td>
+                                <td>{fmt(b.receivedNow)}</td>
+                                <td>{fmt(b.pendingAfter)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
+                  {displayedPreview.unallocated.map((r: any, i: number) => (
+                    <Notice key={i}>
+                      {r.sku} · {r.color} · {r.size}: còn {fmt(r.qty)} sản phẩm
+                      — {r.reason}
+                    </Notice>
+                  ))}
+                </section>
+              )}
+              {draft.state === "draft" && (
+                <div className="incoming-confirm">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={
+                        busy || (auto && (!preview || !!preview.remaining))
+                      }
+                      onChange={(e) => setChecked(e.target.checked)}
+                    />{" "}
+                    Tôi đã kiểm tra ảnh, số lượng và phân bổ vào từng lệnh.
+                  </label>
+                  <div className="actions">
+                    <button
+                      disabled={busy || !form.rows.length}
+                      onClick={() => void save()}
+                    >
+                      Lưu nháp
+                    </button>
+                    <button
+                      className="primary"
+                      disabled={
+                        busy ||
+                        !checked ||
+                        !positive.length ||
+                        !!unknown ||
+                        !!unmatched ||
+                        (auto && (!preview?.id || !!preview.remaining))
+                      }
+                      onClick={() => void confirm()}
+                    >
+                      Xác nhận ghi nhận hàng
+                    </button>
+                  </div>
+                  <p>
+                    Ghi nhận toàn bộ trong một giao dịch. Tồn kho không tự thay
+                    đổi. Lưu nháp hoặc sửa bảng sẽ yêu cầu tính lại phân bổ.
+                  </p>
+                </div>
+              )}
+              {draft.result && (
+                <Notice>
+                  <span>
+                    Đã nhận {fmt(draft.result.received)} sản phẩm.
+                    {draft.result.receipts.map((r: any) => (
+                      <p key={r.receiptId}>
+                        <button
+                          disabled={busy}
+                          onClick={() => viewOrder(r.orderId)}
+                        >
+                          {r.code} · {fmt(r.received)} sản phẩm · Xem lệnh
+                        </button>
+                      </p>
+                    ))}
+                  </span>
+                </Notice>
+              )}
             </div>
-          </section>
-        </>
+          </div>
+        </section>
       )}
-      <section className="card incoming-panel">
+      <section className="incoming-panel">
         <h2>Phiếu của tôi — 100 phiếu gần nhất</h2>
-        <button
-          disabled={busy}
-          onClick={() =>
-            void act(async () => {
-              await reload();
-            })
-          }
-        >
+        <button disabled={busy} onClick={() => void act(reload)}>
           Tải lại danh sách phiếu
         </button>
         <p>
-          Lưu nháp trước khi rời trang. Ảnh trùng phiếu đã xác nhận bị chặn theo
-          mã băm; ảnh chụp lại khác vẫn cần đối soát.
+          Lưu nháp trước khi rời trang. Ảnh đã xác nhận không nhập lại thành
+          phiếu mới.
         </p>
         <div className="table-scroll">
           <table>

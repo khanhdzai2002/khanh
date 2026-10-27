@@ -195,3 +195,13 @@ Chạy bổ sung: `browser-incoming-manual.py` xác minh backend không có OCR 
 Chromium luồng phiếu đầy đủ đã đạt với `INCOMING_SMOKE_PROVIDER=gemini` và `INCOMING_EXPECT_PROVIDER=gemini`: tên Google Gemini ở ô đồng ý, upload → nhận dạng qua backend mô phỏng Google → kiểm tra/ánh xạ → chia3 lệnh → lưu/mở lại nháp → nhận155 → ảnh chứng từ/liên kết lệnh → áp dụng quy ước cho phiếu tiếp → mobile. Không dùng API key thật, không gửi ảnh công ty, chưa xác minh OCR hoặc hạn mức Gemini live.
 
 Đã chạy lại cùng luồng Chromium với `INCOMING_SMOKE_PROVIDER=openai`; luồng tương thích OpenAI cũng đạt sau thay đổi provider/consent.
+
+## Hiện hành: ảnh đối chiếu, nhập tay và tự động cộng dồn
+
+Theo yêu cầu mới, đã bỏ adapter OCR và các bài test provider không còn áp dụng; `/read` cũ trả410 và test xác minh không gọi mạng ngay cả khi có khóa cũ. 232 tests /18 files đạt, gồm19 tests cộng dồn mới: FIFO theo thời gian lệnh; trừ nhận trước; nhiều bao dùng chung sức chứa; dòng thủ công trừ trước; đúng mã–màu–size; dư cần chọn lệnh; không khớp không tạo lệnh; xóa/hủy loại trừ; Nháp/Tạm dừng phải bật; xưởng mơ hồ phải chọn; preview không ghi; xác nhận nhiều lệnh atomic/idempotent; tồn/số đặt gốc giữ nguyên; stale/new order/expired/draft version/tampered form/khác chủ-phiếu bị chặn; hai phiếu tranh cùng sức chứa chỉ một bên nhận theo preview cũ. HTTP kiểm tra quyền và CSRF endpoint allocate, giữ ảnh chứng từ đúng lệnh.
+
+Chromium `browser-incoming-goods.py` dùng ảnh PNG tổng hợp và backend thật trên `_test`: dropdown chỉ có mã đã đặt, màu phụ thuộc mã, size có trong lệnh, xoay/phóng ảnh → nhập300 → preview150+150, chưa ghi biên nhận → lưu/mở lại → xác nhận hai biên nhận → màu khác không bị cộng → stock/inbound không đổi → mở đúng lệnh/ảnh nguồn → phần dư50 chỉ phân bổ sau khi chọn lệnh → mobile không tràn. `browser-incoming-manual.py` xác minh chọn lệnh thủ công vẫn nhận125 trên số đặt100.
+
+Một lần chạy suite gặp test fixture tài khoản dùng cookie ngay khi mới nhận headers, trả401 thay vì403. Đã sửa helper test chờ response body hoàn tất (cùng nguyên nhân fixture bootstrap đã từng gặp); không đổi auth production. Suite chạy lại đạt232/232.
+
+Bảng tổng theo mã–màu–size có test riêng: hai lệnh còn150+200, nhận100 chỉ chạm lệnh đầu nhưng tổng còn thiếu sau vẫn là250 (không bỏ lệnh chưa cần phân bổ).

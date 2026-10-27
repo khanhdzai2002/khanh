@@ -4,10 +4,13 @@ import { randomUUID, createHash } from "node:crypto";
 import { z } from "zod";
 import { audit, transaction, pool, type DB } from "./db";
 import { permission } from "./auth";
-import { receive, loadOrder, type Actor } from "./service";
+import { receive, loadOrder, listOrders, type Actor } from "./service";
 import { AppError, sizes } from "../shared/domain";
 import { incomingFormSchema, normalizeLabel } from "../shared/incoming-goods";
-import { incomingOcrStatus, readIncomingImages } from "./incoming-ocr";
+import {
+  incomingAllocation,
+  incomingAllocationSnapshot,
+} from "../shared/incoming-allocation";
 const hash = (value: string | Buffer) =>
   createHash("sha256").update(value).digest("hex");
 const uploadSchema = z
@@ -33,6 +36,7 @@ const saveSchema = z
 const confirmSchema = saveSchema
   .extend({
     checked: z.literal(true),
+    allocationPreviewId: z.uuid().optional(),
     orders: z
       .array(
         z
@@ -165,6 +169,33 @@ export async function saveIncoming(
   );
   return { version: d.version + 1 };
 }
+export async function previewIncomingAllocation(
+  db: DB,
+  actor: Actor,
+  id: string,
+  raw: unknown,
+) {
+  const input = saveSchema.parse(raw);
+  const draft = await incomingDraft(db, actor, id, true);
+  editable(draft, input.expectedVersion);
+  const orders = await listOrders(db);
+  const plan = incomingAllocation(input.form, orders);
+  const previewId = randomUUID();
+  const body = {
+    draftId: id,
+    version: draft.version,
+    formHash: hash(JSON.stringify(input.form)),
+    snapshot: hash(
+      JSON.stringify(incomingAllocationSnapshot(input.form, orders)),
+    ),
+    plan,
+  };
+  await db.query(
+    "INSERT INTO import_previews(id,actor_id,kind,body) VALUES($1,$2,'incoming-allocation',$3)",
+    [previewId, actor.id, JSON.stringify(body)],
+  );
+  return { id: previewId, ...plan };
+}
 export async function confirmIncoming(
   db: DB,
   actor: Actor,
@@ -219,7 +250,78 @@ export async function confirmIncoming(
       400,
       "Còn ô số lượng chưa kiểm tra; nhập 0 nếu thực tế không có hàng",
     );
-  const positive = input.form.rows.filter((r) => r.qty! > 0);
+  let receiptForm = input.form;
+  let allocationPlan: ReturnType<typeof incomingAllocation> | null = null;
+  const needsAuto = input.form.rows.some(
+    (r) => r.allocationMode === "auto" && (r.qty || 0) > 0,
+  );
+  if (needsAuto || input.allocationPreviewId) {
+    if (!input.allocationPreviewId)
+      throw new AppError(
+        409,
+        "Bấm Tự động cộng dồn và kiểm tra phân bổ trước khi xác nhận",
+      );
+    const preview = (
+      await db.query(
+        "SELECT * FROM import_previews WHERE id=$1 AND actor_id=$2 AND kind='incoming-allocation' FOR UPDATE",
+        [input.allocationPreviewId, actor.id],
+      )
+    ).rows[0];
+    if (
+      !preview ||
+      preview.status !== "pending" ||
+      Date.now() - new Date(preview.created_at).getTime() > 15 * 60 * 1000 ||
+      preview.body.draftId !== id ||
+      preview.body.version !== d.version ||
+      preview.body.formHash !== hash(JSON.stringify(input.form))
+    )
+      throw new AppError(
+        409,
+        "Bảng phân bổ đã hết hạn hoặc phiếu đã đổi. Bấm Tự động cộng dồn lại",
+      );
+    // Lock every matching order in a stable order, then verify the full snapshot.
+    const relevant = incomingAllocationSnapshot(
+      input.form,
+      await listOrders(db),
+    );
+    if (relevant.length)
+      await db.query(
+        "SELECT id FROM production_orders WHERE id=ANY($1::uuid[]) ORDER BY id FOR UPDATE",
+        [relevant.map((o) => o.id)],
+      );
+    const orders = await listOrders(db);
+    if (
+      preview.body.snapshot !==
+      hash(JSON.stringify(incomingAllocationSnapshot(input.form, orders)))
+    )
+      throw new AppError(
+        409,
+        "Lệnh sản xuất đã thay đổi. Tải lại dữ liệu và bấm Tự động cộng dồn lại",
+      );
+    allocationPlan = incomingAllocation(input.form, orders);
+    if (allocationPlan.remaining)
+      throw new AppError(
+        409,
+        "Còn hàng chưa phân bổ. Chọn lệnh nhận phần giao dư hoặc kiểm tra nhà xưởng",
+      );
+    receiptForm = {
+      ...input.form,
+      rows: allocationPlan.allocations.map((a) => ({
+        ...input.form.rows.find((r) => r.id === a.sourceRowId)!,
+        id: randomUUID(),
+        qty: a.qty,
+        orderId: a.orderId,
+        allocationMode: "manual" as const,
+        excessOrderId: null,
+      })),
+    };
+    if (JSON.stringify(input.orders) !== JSON.stringify(allocationPlan.orders))
+      throw new AppError(
+        409,
+        "Danh sách lệnh không khớp bảng phân bổ. Xem trước lại",
+      );
+  }
+  const positive = receiptForm.rows.filter((r) => r.qty! > 0);
   if (!positive.length)
     throw new AppError(400, "Phải có ít nhất một dòng nhận hàng");
   const orderIds = [...new Set(positive.map((r) => r.orderId))].sort();
@@ -241,6 +343,8 @@ export async function confirmIncoming(
   >();
   for (const orderId of orderIds as string[]) {
     const order = await loadOrder(db, orderId, true);
+    if (input.form.supplier && order.supplier !== input.form.supplier)
+      throw new AppError(409, "Lệnh nhận khác Nhà xưởng trả hàng đã chọn");
     const rows = positive.filter((r) => r.orderId === orderId);
     const lineQty = new Map<string, number>();
     for (const row of rows) {
@@ -323,21 +427,36 @@ export async function confirmIncoming(
     draftId: id,
     receipts: results,
     received: positive.reduce((n, r) => n + r.qty!, 0),
+    ...(allocationPlan ? { allocation: allocationPlan } : {}),
   };
   await db.query(
     "UPDATE incoming_goods_drafts SET form=$2,state='confirmed',confirmation_hash=$3,result=$4,version=version+1,updated_at=now() WHERE id=$1",
     [id, JSON.stringify(input.form), requestHash, JSON.stringify(result)],
   );
+  if (input.allocationPreviewId)
+    await db.query(
+      "UPDATE import_previews SET status='confirmed' WHERE id=$1",
+      [input.allocationPreviewId],
+    );
   await audit(db, actor.id, "incoming.confirm", id, {
     form: input.form,
     result,
+    ...(allocationPlan ? { allocation: allocationPlan } : {}),
     aliases: [...aliasChanges.values()],
   });
   return result;
 }
 export const incomingRouter = Router();
 incomingRouter.use(permission("receive"));
-incomingRouter.get("/status", (_req, res) => res.json(incomingOcrStatus()));
+incomingRouter.get("/status", (_req, res) =>
+  res.json({
+    mode: "manual",
+    configured: false,
+    externalProcessing: false,
+    configurationError:
+      "Đã chuyển sang xem ảnh và nhập tay. Tải lại trang để dùng giao diện mới.",
+  }),
+);
 incomingRouter.get("/aliases", async (_req, res) =>
   res.json(
     (
@@ -405,88 +524,24 @@ incomingRouter.put("/:id", async (req, res) =>
     ),
   ),
 );
-incomingRouter.post(
-  "/:id/read",
-  rateLimit({
-    windowMs: 60000,
-    limit: 4,
-    standardHeaders: "draft-8",
-    legacyHeaders: false,
-  }),
-  async (req, res) => {
-    const id = z.uuid().parse(req.params.id),
-      input = z
-        .object({
-          expectedVersion: z.number().int().positive(),
-          consent: z.literal(true),
-          provider: z.enum(["openai", "gemini"]).optional(),
-        })
-        .strict()
-        .parse(req.body);
-    const config = incomingOcrStatus();
-    if ((input.provider || "openai") !== config.providerId)
-      throw new AppError(
-        409,
-        "Nhà cung cấp đọc ảnh đã thay đổi. Tải lại trang và đồng ý với nhà cung cấp hiện tại trước khi gửi ảnh",
-      );
-    const d = await incomingDraft(pool, req.actor!, id);
-    editable(d, input.expectedVersion);
-    if (d.form.rows.length)
-      throw new AppError(
-        409,
-        "Phiếu đã có bảng nhập liệu. Tạo phiếu mới để đọc ảnh khác, tránh ghi đè dữ liệu đang sửa",
-      );
-    const images = (
-      await pool.query(
-        "SELECT mime,bytes FROM incoming_goods_images WHERE draft_id=$1 ORDER BY name,id",
-        [id],
-      )
-    ).rows;
-    if (!images.length) throw new AppError(400, "Phiếu không có ảnh");
-    await transaction(async (db) => {
-      const current = await incomingDraft(db, req.actor!, id, true);
-      editable(current, input.expectedVersion);
-      await audit(db, req.actor!.id, "incoming.ocr.request", id, {
-        provider: config.provider,
-        model: config.model,
-        consent: true,
-        imageCount: images.length,
-      });
-    });
-    const result = await readIncomingImages(images);
-    const form = {
-      date: result.date || d.form.date,
-      note: result.note,
-      rows: result.rows.flatMap((row) =>
-        sizes.map((size) => ({
-          id: randomUUID(),
-          sku: row.sku || "CHƯA RÕ",
-          color: row.color || "CHƯA RÕ",
-          bag: row.bag,
-          size,
-          qty: row[size],
-          variantId: null,
-          orderId: null,
-          remember: false,
-        })),
+// Explicitly retire OCR: old clients must never send company images externally.
+incomingRouter.post("/:id/read", (_req, _res) => {
+  throw new AppError(
+    410,
+    "Đã bỏ đọc ảnh tự động. Tải lại trang, xem ảnh và chọn mã/màu để nhập tay",
+  );
+});
+incomingRouter.post("/:id/allocate", async (req, res) =>
+  res.json(
+    await transaction((db) =>
+      previewIncomingAllocation(
+        db,
+        req.actor!,
+        z.uuid().parse(req.params.id),
+        req.body,
       ),
-    };
-    await transaction(async (db) => {
-      const current = await incomingDraft(db, req.actor!, id, true);
-      editable(current, input.expectedVersion);
-      await db.query(
-        "UPDATE incoming_goods_drafts SET form=$2,ocr=$3,version=version+1,updated_at=now() WHERE id=$1",
-        [id, JSON.stringify(form), JSON.stringify(result)],
-      );
-      await audit(db, req.actor!.id, "incoming.ocr", id, {
-        provider: config.provider,
-        model: config.model,
-        consent: true,
-        imageCount: images.length,
-      });
-    });
-    res.json({ version: d.version + 1, form, ocr: result });
-  },
+    ),
+  ),
 );
 incomingRouter.post("/:id/confirm", async (req, res) =>
   res.json(

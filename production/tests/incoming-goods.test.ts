@@ -20,10 +20,8 @@ import { saveSku, createOrder, loadOrder, receive } from "../server/service";
 import {
   matchColor,
   normalizeLabel,
-  ocrResultSchema,
   type IncomingRow,
 } from "../shared/incoming-goods";
-import { incomingOcrStatus, readIncomingImages } from "../server/incoming-ocr";
 import { makeApp } from "../server/app";
 const actor = {
   id: randomUUID(),
@@ -379,81 +377,7 @@ it("blocks disabled/Viewer and other owner, even direct confirmation calls", asy
     ),
   ).rejects.toThrow("Không tìm thấy");
 });
-it("OCR is not configured without backend key; never invokes external service", async () => {
-  const spy = vi.fn();
-  vi.stubGlobal("fetch", spy);
-  expect(incomingOcrStatus().configured).toBe(false);
-  await expect(
-    readIncomingImages([{ mime: "image/png", bytes: png }]),
-  ).rejects.toThrow("Chưa cấu hình");
-  expect(spy).not.toHaveBeenCalled();
-});
-it("OCR sends only selected images to fixed endpoint; blank cells remain null; source does not become receipts", async () => {
-  process.env.INCOMING_OCR_API_KEY = "synthetic-never-use";
-  const result = {
-    date: null,
-    note: "",
-    warnings: ["uncertain"],
-    rows: [
-      { sku: "miu37", color: "Cam", bag: "1", S: 150, M: null, L: 0, XL: null },
-    ],
-  };
-  const spy = vi.fn(
-    async (_url: string, _options?: RequestInit) =>
-      new Response(
-        JSON.stringify({
-          choices: [
-            {
-              finish_reason: "stop",
-              message: { content: JSON.stringify(result) },
-            },
-          ],
-        }),
-        { status: 200 },
-      ),
-  );
-  vi.stubGlobal("fetch", spy);
-  expect(await readIncomingImages([{ mime: "image/png", bytes: png }])).toEqual(
-    result,
-  );
-  expect(spy.mock.calls[0][0]).toBe(
-    "https://api.openai.com/v1/chat/completions",
-  );
-  expect((await pool.query("SELECT * FROM production_receipts")).rowCount).toBe(
-    0,
-  );
-  expect(
-    ocrResultSchema.safeParse({
-      ...result,
-      rows: [{ ...result.rows[0], XS: 10 }],
-    }).success,
-  ).toBe(false);
-});
-it("OCR malformed/truncated/provider errors have safe diagnostics and no partial data", async () => {
-  process.env.INCOMING_OCR_API_KEY = "synthetic-secret";
-  for (const response of [
-    new Response("sensitive-error", { status: 401 }),
-    new Response(
-      JSON.stringify({
-        choices: [{ finish_reason: "length", message: { content: "{}" } }],
-      }),
-    ),
-    new Response(
-      JSON.stringify({
-        choices: [{ finish_reason: "stop", message: { content: "bad JSON" } }],
-      }),
-    ),
-  ]) {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => response),
-    );
-    await expect(
-      readIncomingImages([{ mime: "image/png", bytes: png }]),
-    ).rejects.toThrow();
-  }
-});
-it("HTTP: auth, CSRF, role, source image ownership, OCR consent and saved extraction", async () => {
+it("HTTP: auth, CSRF, role, source image ownership, retired OCR never sends images, and source evidence", async () => {
   const server = makeApp().listen(0);
   await new Promise<void>((r) => server.once("listening", r));
   const base = `http://127.0.0.1:${(server.address() as any).port}`;
@@ -504,76 +428,61 @@ it("HTTP: auth, CSRF, role, source image ownership, OCR consent and saved extrac
     );
     expect(image.headers.get("content-type")).toContain("image/png");
     expect(Buffer.from(await image.arrayBuffer())).toEqual(png);
-    expect(
-      (
-        await post(`/api/incoming/${d.id}/read`, {
-          expectedVersion: 1,
-          consent: false,
-        })
-      ).status,
-    ).toBe(400);
-    process.env.INCOMING_OCR_PROVIDER = "gemini";
-    const noProvider = await post(`/api/incoming/${d.id}/read`, {
+    process.env.INCOMING_OCR_API_KEY = "synthetic-disabled-key";
+    const spy = vi.fn();
+    vi.stubGlobal("fetch", spy);
+    const retired = await post(`/api/incoming/${d.id}/read`, {
       expectedVersion: 1,
       consent: true,
     });
-    expect(noProvider.status).toBe(409);
-    process.env.INCOMING_OCR_PROVIDER = "openai";
-    process.env.INCOMING_OCR_API_KEY = "synthetic";
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              choices: [
-                {
-                  finish_reason: "stop",
-                  message: {
-                    content: JSON.stringify({
-                      date: "2026-10-26",
-                      note: "",
-                      warnings: [],
-                      rows: [
-                        {
-                          sku: "MIU37",
-                          color: "Cam",
-                          bag: "1",
-                          S: 150,
-                          M: null,
-                          L: 0,
-                          XL: 0,
-                        },
-                      ],
-                    }),
-                  },
-                },
-              ],
-            }),
-          ),
-      ),
-    );
-    const read = await post(`/api/incoming/${d.id}/read`, {
-      expectedVersion: 1,
-      consent: true,
-    });
-    expect(read.status).toBe(200);
-    const parsed = await read.json();
-    expect(parsed.form.rows).toHaveLength(4);
-    expect(parsed.form.rows[1].qty).toBeNull();
-    expect(parsed.version).toBe(2);
+    expect(retired.status).toBe(410);
+    expect(spy).not.toHaveBeenCalled();
     expect(
-      (
-        await post(`/api/incoming/${d.id}/read`, {
-          expectedVersion: 2,
-          consent: true,
-        })
-      ).status,
-    ).toBe(409);
+      (await realFetch(base + "/api/incoming/status", { headers })).status,
+    ).toBe(200);
     expect(
       (await pool.query("SELECT * FROM production_receipts")).rowCount,
     ).toBe(0);
     const f = await fixture();
+    const allocationRequest = {
+      expectedVersion: 1,
+      form: {
+        date: "2026-10-27",
+        note: "HTTP preview",
+        rows: [
+          {
+            ...row(f, 100),
+            color: f.order.items[0].color,
+            allocationMode: "auto",
+          },
+        ],
+      },
+    };
+    expect(
+      (
+        await post(`/api/incoming/${d.id}/allocate`, allocationRequest, {
+          "X-CSRF-Token": "wrong",
+        })
+      ).status,
+    ).toBe(403);
+    await pool.query("UPDATE users SET role='Viewer' WHERE id=$1", [
+      me.user.id,
+    ]);
+    expect(
+      (await post(`/api/incoming/${d.id}/allocate`, allocationRequest)).status,
+    ).toBe(403);
+    await pool.query("UPDATE users SET role='Warehouse Operator' WHERE id=$1", [
+      me.user.id,
+    ]);
+    const allocationResponse = await post(
+      `/api/incoming/${d.id}/allocate`,
+      allocationRequest,
+    );
+    expect(allocationResponse.status).toBe(200);
+    expect((await allocationResponse.json()).allocated).toBe(100);
+    expect(
+      (await pool.query("SELECT * FROM production_receipts")).rowCount,
+    ).toBe(0);
     const source = await tx((db) => createIncoming(db, actor, upload()));
     await tx((db) =>
       confirmIncoming(db, actor, source.id, payload([row(f)], [f.order])),

@@ -86,4 +86,4 @@ Trong chú giải biểu đồ tròn, bấm **mã → màu → size** để xem 
 
 Quy trình giao dư do cắt tròn cây vải: xem [Giao nhận thực tế](docs/OVER_RECEIPTS.md). Cho nhận vượt số đặt và hiển thị tiến độ trên 100%; thiếu/dư đối soát riêng từng SKU.
 
-Nhập ảnh phiếu kiểm, ánh xạ theo mã–màu–size, phân bổ và xác nhận hàng về: [Nhập liệu hàng về](docs/INCOMING_GOODS.md). OCR cần cấu hình backend riêng; nhập bảng thủ công không cần API key.
+Xem ảnh phiếu kiểm, chọn mã–màu–size, nhập tay, tự động cộng dồn và xác nhận hàng về: [Nhập liệu hàng về](docs/INCOMING_GOODS.md). Không còn sử dụng OCR hoặc yêu cầu API key.

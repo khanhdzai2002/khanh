@@ -215,6 +215,8 @@ it("HTTP: anonymous/Viewer bị chặn ghi; Admin thêm, xem audit và khóa m�
   const base = `http://127.0.0.1:${(server.address() as any).port}`;
   const login = async () => {
     const r = await fetch(base + "/synthetic-test-session");
+    // Wait for the session response to finish before reusing its cookie.
+    await r.arrayBuffer();
     return r.headers.get("set-cookie")!.split(";")[0];
   };
   const post = (

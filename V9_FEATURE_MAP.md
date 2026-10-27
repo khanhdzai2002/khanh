@@ -128,3 +128,7 @@ Giới hạn V9 nhận không vượt còn chờ được thay bằng [chính s�
 ## Bổ sung: Nhập liệu hàng về
 
 [Nhập liệu hàng về](production/docs/INCOMING_GOODS.md): ảnh phiếu → OCR có đồng ý → ánh xạ màu theo mã → kiểm tra size/số lượng → phân bổ nhiều lệnh → xác nhận transaction, lưu ảnh chứng từ, quy ước màu và chống ghi trùng. Đây là tính năng mới theo yêu cầu, dùng lại cơ chế nhận hàng và giao dư hiện hành; không thay công thức dự báo.
+
+## Điều chỉnh theo yêu cầu: bỏ OCR, tự động cộng dồn hàng về
+
+Ảnh chỉ dùng làm chứng từ nhập tay. Chọn mã/màu từ lệnh sản xuất, phân bổ FIFO đúng mã–màu–size vào phần còn thiếu, xem trước và xác nhận transaction. Phần dư yêu cầu chọn lệnh rõ ràng. Không thay công thức gối hàng hoặc tự cộng tồn kho. Xem [hướng dẫn hiện hành](production/docs/INCOMING_GOODS.md).

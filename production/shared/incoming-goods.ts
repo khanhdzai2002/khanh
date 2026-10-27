@@ -11,6 +11,8 @@ export const incomingRowSchema = z
     variantId: z.uuid().nullable(),
     orderId: z.uuid().nullable(),
     remember: z.boolean().default(false),
+    allocationMode: z.enum(["manual", "auto"]).optional(),
+    excessOrderId: z.uuid().nullable().optional(),
   })
   .strict();
 export type IncomingRow = z.infer<typeof incomingRowSchema>;
@@ -18,6 +20,9 @@ export const incomingFormSchema = z
   .object({
     date: z.iso.date(),
     note: z.string().max(1000),
+    supplier: z.string().max(200).optional(),
+    includeDrafts: z.boolean().optional(),
+    includePaused: z.boolean().optional(),
     rows: z.array(incomingRowSchema).min(1).max(1000),
   })
   .strict();
@@ -83,25 +88,3 @@ export function incomingOrders(
       o.items.some((i) => i.variantId === variantId),
   );
 }
-export const ocrResultSchema = z
-  .object({
-    date: z.iso.date().nullable(),
-    note: z.string().max(1000),
-    warnings: z.array(z.string().max(500)).max(100),
-    rows: z
-      .array(
-        z
-          .object({
-            sku: z.string().max(90),
-            color: z.string().max(200),
-            bag: z.string().max(80),
-            S: z.number().int().min(0).max(1000000).nullable(),
-            M: z.number().int().min(0).max(1000000).nullable(),
-            L: z.number().int().min(0).max(1000000).nullable(),
-            XL: z.number().int().min(0).max(1000000).nullable(),
-          })
-          .strict(),
-      )
-      .max(250),
-  })
-  .strict();
