@@ -1804,3 +1804,25 @@ summary {
 .incoming-child::before { content: ""; position: absolute; left: 11px; top: 14px; width: 9px; height: 18px; border-left: 2px solid #ee741f; border-bottom: 2px solid #ee741f; border-radius: 0 0 0 4px; }
 .incoming-matrix .incoming-matrix-line > td:nth-child(8) > button,
 .incoming-matrix .incoming-matrix-line > td:nth-child(9) > button { display: flex; width: 100%; margin-top: 6px; white-space: normal; }
+.receiving-filters { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin: 16px 0; }
+.receiving-kpis { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:18px 0; }
+.receiving-kpis > div { border:1px solid #e2e5eb; border-radius:8px; padding:16px; display:grid; gap:8px; }
+.receiving-kpis strong { font-size:26px; color:#b45309; }
+.receiving-charts { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin:24px 0; }
+.receiving-donut { width:220px; height:220px; border-radius:50%; display:grid; place-items:center; margin:16px auto; }
+.receiving-donut > div { width:150px; height:150px; border-radius:50%; background:white; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.receiving-donut b { font-size:28px; }
+.receiving-legend { display:flex; flex-wrap:wrap; gap:8px; }
+.receiving-legend i { width:12px; height:12px; border-radius:3px; }
+.receiving-day { display:grid; grid-template-columns:90px minmax(0,1fr) 65px; align-items:center; gap:8px; margin:9px 0; font-size:12px; }
+.receiving-day > div { display:flex; min-height:16px; }
+.receiving-day i { background:#2563eb; }.receiving-day em { background:#ee741f; }
+.receiving-product { padding:12px 0; border-bottom:1px solid #e5e7eb; }
+.receiving-product summary { cursor:pointer; font-weight:700; }
+.receiving-note { white-space:normal; min-width:230px; max-width:350px; }
+@media(max-width:900px){.receiving-filters {grid-template-columns:repeat(2,minmax(0,1fr));}.receiving-charts {grid-template-columns:1fr;}}
+@media(max-width:500px){.receiving-kpis {grid-template-columns:repeat(2,minmax(0,1fr));}.receiving-filters {grid-template-columns:1fr;}}
+.incoming-matrix .incoming-matrix-line > td:first-child > select,
+.incoming-matrix .incoming-matrix-line > td:nth-child(2) > select { display: block; }
+.incoming-matrix .incoming-matrix-line > td:first-child > input,
+.incoming-matrix .incoming-matrix-line > td:nth-child(2) > input { display: block; margin-top: 6px; }

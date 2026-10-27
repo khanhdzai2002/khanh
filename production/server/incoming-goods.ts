@@ -11,6 +11,7 @@ import {
   incomingAllocation,
   incomingAllocationSnapshot,
 } from "../shared/incoming-allocation";
+import { loadReceivingReport, receivingCsv } from "./receiving-report";
 const hash = (value: string | Buffer) =>
   createHash("sha256").update(value).digest("hex");
 const uploadSchema = z
@@ -36,6 +37,7 @@ const saveSchema = z
 const confirmSchema = saveSchema
   .extend({
     checked: z.literal(true),
+    acceptUnmatched: z.boolean().optional(),
     allocationPreviewId: z.uuid().optional(),
     orders: z
       .array(
@@ -43,7 +45,6 @@ const confirmSchema = saveSchema
           .object({ id: z.uuid(), version: z.number().int().positive() })
           .strict(),
       )
-      .min(1)
       .max(200),
   })
   .strict();
@@ -178,6 +179,37 @@ export async function previewIncomingAllocation(
   const input = saveSchema.parse(raw);
   const draft = await incomingDraft(db, actor, id, true);
   editable(draft, input.expectedVersion);
+  const ids = [
+    ...new Set(
+      input.form.rows
+        .filter((r) => (r.qty || 0) > 0 && r.variantId)
+        .map((r) => r.variantId!),
+    ),
+  ];
+  if (ids.length) {
+    const variants = (
+      await db.query(
+        "SELECT id,size,body FROM variants WHERE id=ANY($1::uuid[])",
+        [ids],
+      )
+    ).rows;
+    for (const row of input.form.rows.filter(
+      (r) => (r.qty || 0) > 0 && r.variantId,
+    )) {
+      const v = variants.find((v) => v.id === row.variantId);
+      if (
+        !v ||
+        v.size !== row.size ||
+        normalizeLabel(v.body.sku) !== normalizeLabel(row.sku) ||
+        (row.allocationMode !== "manual" &&
+          normalizeLabel(v.body.color) !== normalizeLabel(row.color))
+      )
+        throw new AppError(
+          400,
+          "SKU đã chọn không khớp mã–màu–size. Chọn lại danh mục hoặc nhập hàng chưa có SKU",
+        );
+    }
+  }
   const orders = await listOrders(db);
   const plan = incomingAllocation(input.form, orders);
   const previewId = randomUUID();
@@ -253,7 +285,9 @@ export async function confirmIncoming(
   let receiptForm = input.form;
   let allocationPlan: ReturnType<typeof incomingAllocation> | null = null;
   const needsAuto = input.form.rows.some(
-    (r) => r.allocationMode === "auto" && (r.qty || 0) > 0,
+    (r) =>
+      (r.allocationMode === "auto" || r.allocationMode === "unmatched") &&
+      (r.qty || 0) > 0,
   );
   if (needsAuto || input.allocationPreviewId) {
     if (!input.allocationPreviewId)
@@ -299,10 +333,20 @@ export async function confirmIncoming(
         "Lệnh sản xuất đã thay đổi. Tải lại dữ liệu và bấm Tự động cộng dồn lại",
       );
     allocationPlan = incomingAllocation(input.form, orders);
-    if (allocationPlan.remaining)
+    if (allocationPlan.unallocated.some((r) => !r.canRecordUnmatched))
       throw new AppError(
         409,
-        "Còn hàng chưa phân bổ. Chọn lệnh nhận phần giao dư hoặc kiểm tra nhà xưởng",
+        "Phân bổ bị chặn do lệnh/xưởng không rõ. Sửa lựa chọn hoặc chọn Chưa đối chiếu lệnh cho dòng cần ghi riêng",
+      );
+    if (allocationPlan.remaining && !input.acceptUnmatched)
+      throw new AppError(
+        409,
+        "Còn hàng chưa phân bổ. Đánh dấu đồng ý ghi nhận phần chưa đối chiếu lệnh hoặc chọn lại lệnh nhận",
+      );
+    if (allocationPlan.remaining && !input.form.supplier?.trim())
+      throw new AppError(
+        400,
+        "Chọn Nhà xưởng trả hàng để lưu hàng chưa đối chiếu lệnh",
       );
     receiptForm = {
       ...input.form,
@@ -310,6 +354,7 @@ export async function confirmIncoming(
         ...input.form.rows.find((r) => r.id === a.sourceRowId)!,
         id: randomUUID(),
         qty: a.qty,
+        variantId: a.variantId,
         orderId: a.orderId,
         allocationMode: "manual" as const,
         excessOrderId: null,
@@ -322,7 +367,7 @@ export async function confirmIncoming(
       );
   }
   const positive = receiptForm.rows.filter((r) => r.qty! > 0);
-  if (!positive.length)
+  if (!positive.length && !allocationPlan?.remaining)
     throw new AppError(400, "Phải có ít nhất một dòng nhận hàng");
   const orderIds = [...new Set(positive.map((r) => r.orderId))].sort();
   if (orderIds.includes(null))
@@ -423,10 +468,48 @@ export async function confirmIncoming(
       [a.productId, a.raw, a.color, actor.id],
     );
   }
+  const unmatchedItems = [];
+  for (const missing of allocationPlan?.unallocated || []) {
+    const row = input.form.rows.find((r) => r.id === missing.rowId)!;
+    const item = {
+      id: randomUUID(),
+      sku: row.sku,
+      color: row.color,
+      size: row.size,
+      qty: missing.qty,
+      bag: row.bag,
+      reason: missing.reason,
+    };
+    await db.query(
+      "INSERT INTO incoming_unmatched_items(id,draft_id,actor_id,source_row_id,date,supplier,sku,color,size,qty,bag,variant_id,reason,note) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
+      [
+        item.id,
+        id,
+        actor.id,
+        row.id,
+        input.form.date,
+        input.form.supplier!.trim(),
+        row.sku,
+        row.color,
+        row.size,
+        missing.qty,
+        row.bag,
+        row.variantId,
+        missing.reason,
+        input.form.note,
+      ],
+    );
+    unmatchedItems.push(item);
+  }
+  const matchedReceived = positive.reduce((n, r) => n + r.qty!, 0),
+    unmatchedReceived = unmatchedItems.reduce((n, r) => n + r.qty, 0);
   const result = {
     draftId: id,
     receipts: results,
-    received: positive.reduce((n, r) => n + r.qty!, 0),
+    matchedReceived,
+    unmatchedReceived,
+    unmatchedItems,
+    received: matchedReceived + unmatchedReceived,
     ...(allocationPlan ? { allocation: allocationPlan } : {}),
   };
   await db.query(
@@ -447,6 +530,24 @@ export async function confirmIncoming(
   return result;
 }
 export const incomingRouter = Router();
+incomingRouter.get("/report", permission("read"), async (req, res) => {
+  const report = await transaction(async (db) => {
+    await db.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    return loadReceivingReport(db, req.query);
+  });
+  const { exportEntries, ...response } = report;
+  res.json(response);
+});
+incomingRouter.get("/report/export", permission("read"), async (req, res) => {
+  const report = await transaction(async (db) => {
+    await db.query("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    return loadReceivingReport(db, req.query);
+  });
+  res
+    .set("Content-Disposition", 'attachment; filename="hang-ve.csv"')
+    .type("text/csv; charset=utf-8")
+    .send(receivingCsv(report.exportEntries));
+});
 incomingRouter.use(permission("receive"));
 incomingRouter.get("/status", (_req, res) =>
   res.json({

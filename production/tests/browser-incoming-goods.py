@@ -23,9 +23,9 @@ with sync_playwright() as p:
  expect(page.get_by_text('Đã tạo phiếu. Xem ảnh',exact=False)).to_be_visible()
  page.get_by_role('button',name='Xoay ảnh 90°',exact=True).click();assert page.locator('.incoming-photo-scroll img').evaluate('(el)=>getComputedStyle(el).transform.startsWith("matrix(0, 1, -1, 0,")');page.get_by_role('button',name='Phóng to',exact=True).click();expect(page.get_by_text('125%',exact=True)).to_be_visible()
  page.get_by_role('button',name='Thêm bao',exact=True).click()
- code=page.get_by_label('Mã bao 1 dòng 1',exact=True);assert code.locator('option').all_text_contents()==['Chọn mã sản phẩm','MIU37','MIU66']
- code.select_option('MIU37');color=page.get_by_label('Màu bao 1 dòng 1',exact=True);assert set(color.locator('option').all_text_contents())=={'Chọn màu của mã','Đen','Ghi tây (Phối nâu)'}
- color.select_option('Ghi tây (Phối nâu)');expect(page.get_by_label('M bao 1 dòng 1',exact=True)).to_be_enabled();expect(page.get_by_label('S bao 1 dòng 1',exact=True)).to_be_disabled();page.get_by_label('M bao 1 dòng 1',exact=True).fill('300')
+ code=page.get_by_label('Mã bao 1 dòng 1',exact=True);assert code.locator('option').all_text_contents()==['Chọn mã sản phẩm','Nhập mã chưa có trên app…','MIU37','MIU66','SYNTHETIC-NOT-ORDERED']
+ code.select_option('MIU37');color=page.get_by_label('Màu bao 1 dòng 1',exact=True);assert set(color.locator('option').all_text_contents())=={'Chọn màu của mã','Nhập màu chưa có trên app…','Đen','Ghi tây (Phối nâu)'}
+ color.select_option('Ghi tây (Phối nâu)');expect(page.get_by_label('M bao 1 dòng 1',exact=True)).to_be_enabled();expect(page.get_by_label('S bao 1 dòng 1',exact=True)).to_be_enabled();page.get_by_label('M bao 1 dòng 1',exact=True).fill('300')
  expect(page.get_by_label('Cách nhận bao 1 dòng 1',exact=True)).to_have_value('auto')
  expect(page.get_by_role('button',name='Xác nhận ghi nhận hàng',exact=True)).to_be_disabled()
  with page.expect_response(lambda r:r.url.endswith('/allocate')) as plan:page.get_by_role('button',name='Tự động cộng dồn — xem phân bổ',exact=True).click()
@@ -42,7 +42,7 @@ with sync_playwright() as p:
  actual=page.request.get('http://localhost:5175/api/orders').json();byid={o['id']:o for o in actual};assert byid[a['id']]['items'][0]['received']==150 and byid[bb['id']]['items'][0]['received']==150 and byid[c['id']]['items'][0]['received']==0
  assert all(v['stock']==30 and v['inbound']==10 for v in page.request.get('http://localhost:5175/api/skus').json())
  page.get_by_role('button',name=a['code']+' · 150 sản phẩm · Xem lệnh',exact=True).click();d=page.get_by_role('dialog');expect(d.get_by_text('LỆNH SẢN XUẤT · '+a['code'],exact=True)).to_be_visible();expect(d.get_by_role('link',name='synthetic-slip.png · Mở ảnh gốc',exact=True)).to_be_visible();d.get_by_role('button',name='Đóng',exact=True).click()
- page.get_by_role('button',name='Nhập liệu hàng về',exact=True).click();page.get_by_role('button',name='Nhập bảng không kèm ảnh',exact=True).click();page.get_by_role('button',name='Thêm bao',exact=True).click();page.get_by_label('Mã bao 1 dòng 1',exact=True).select_option('MIU66');assert page.get_by_label('Màu bao 1 dòng 1',exact=True).locator('option').all_text_contents()==['Chọn màu của mã','Trắng (Phối đỏ)']
+ page.get_by_role('button',name='Nhập liệu hàng về',exact=True).click();page.get_by_role('button',name='Nhập bảng không kèm ảnh',exact=True).click();page.get_by_role('button',name='Thêm bao',exact=True).click();page.get_by_label('Mã bao 1 dòng 1',exact=True).select_option('MIU66');assert page.get_by_label('Màu bao 1 dòng 1',exact=True).locator('option').all_text_contents()==['Chọn màu của mã','Nhập màu chưa có trên app…','Trắng (Phối đỏ)']
  page.get_by_label('Mã bao 1 dòng 1',exact=True).select_option('MIU37');page.get_by_label('Màu bao 1 dòng 1',exact=True).select_option('Ghi tây (Phối nâu)');page.get_by_label('M bao 1 dòng 1',exact=True).fill('100')
  with page.expect_response(lambda r:r.url.endswith('/allocate')) as excess:page.get_by_role('button',name='Tự động cộng dồn — xem phân bổ',exact=True).click()
  assert excess.value.json()['remaining']==50;expect(page.get_by_role('button',name='Xác nhận ghi nhận hàng',exact=True)).to_be_disabled()
@@ -51,5 +51,5 @@ with sync_playwright() as p:
  assert complete.value.json()['remaining']==0 and complete.value.json()['excess']==50
  page.set_viewport_size({'width':390,'height':844});assert page.evaluate('document.documentElement.scrollWidth<=innerWidth');page.screenshot(path='/tmp/comsflow-fifo-mobile.png',full_page=True)
  assert not errors,errors;assert not external,external
- print('PASS manual photo/FIFO UI: order-only code/colour choices -> photo rotate/zoom ->300 split150+150 -> preview only -> save/reload -> atomic receipts -> other colour untouched -> stock unchanged -> source/order link -> colour dependency -> excess50 requires target -> mobile. No external AI.')
+ print('PASS manual photo/FIFO UI: catalogue/order code/colour choices -> photo rotate/zoom ->300 split150+150 -> preview only -> save/reload -> atomic receipts -> other colour untouched -> stock unchanged -> source/order link -> colour dependency -> excess50 requires target -> mobile. No external AI.')
  b.close()

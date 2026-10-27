@@ -13,7 +13,7 @@ export const incomingRowSchema = z
     variantId: z.uuid().nullable(),
     orderId: z.uuid().nullable(),
     remember: z.boolean().default(false),
-    allocationMode: z.enum(["manual", "auto"]).optional(),
+    allocationMode: z.enum(["manual", "auto", "unmatched"]).optional(),
     excessOrderId: z.uuid().nullable().optional(),
   })
   .strict();

@@ -512,7 +512,7 @@ export async function receive(
       version: before.version + 1,
     };
   await db.query(
-    "INSERT INTO production_receipts(id,order_id,actor_id,date,note,idempotency_key,request_hash,response) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+    "INSERT INTO production_receipts(id,order_id,actor_id,date,note,idempotency_key,request_hash,response,supplier_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
     [
       rid,
       id,
@@ -522,6 +522,7 @@ export async function receive(
       key,
       hash,
       JSON.stringify(result),
+      before.supplier,
     ],
   );
   for (const l of input.lines) {

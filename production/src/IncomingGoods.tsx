@@ -8,6 +8,7 @@ import {
 } from "../shared/incoming-goods";
 import { Field, Notice, fmt, vnDate, type Run } from "./ui";
 import type { Snapshot } from "./App";
+import { ReceivingDashboard } from "./ReceivingDashboard";
 import { IncomingBagTable, newIncomingLine } from "./IncomingBagTable";
 import { incomingMatrix, withIncomingGroups } from "../shared/incoming-matrix";
 type Preview = {
@@ -52,7 +53,8 @@ export function IncomingGoods({
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
     [dirty, setDirty] = useState(false),
-    [checked, setChecked] = useState(false);
+    [checked, setChecked] = useState(false),
+    [acceptUnmatched, setAcceptUnmatched] = useState(false);
   const [photoRatio, setPhotoRatio] = useState(1);
   const [angle, setAngle] = useState(0),
     [zoom, setZoom] = useState(100),
@@ -62,8 +64,15 @@ export function IncomingGoods({
     writable = can(role, "receive");
   const activeOrders = data.orders.filter((o) => !o.deletedAt && !o.cancelled);
   const variants = [
-    ...new Map(
-      activeOrders.flatMap((o) =>
+    ...new Map([
+      ...data.skus.map(
+        (v) =>
+          [
+            v.id,
+            { id: v.id, sku: v.sku, color: v.color, size: v.size },
+          ] as const,
+      ),
+      ...activeOrders.flatMap((o) =>
         o.items
           .filter((i) => isActiveSize(i.size))
           .map(
@@ -74,7 +83,7 @@ export function IncomingGoods({
               ] as const,
           ),
       ),
-    ).values(),
+    ]).values(),
   ];
   const suppliers = [...new Set(activeOrders.map((o) => o.supplier))].sort(
     (a, b) => a.localeCompare(b, "vi"),
@@ -86,6 +95,7 @@ export function IncomingGoods({
   useEffect(() => {
     setPreview(null);
     setChecked(false);
+    setAcceptUnmatched(false);
   }, [data.orders]);
   const act = async (fn: () => Promise<void>) => {
     if (inFlight.current) return;
@@ -106,6 +116,7 @@ export function IncomingGoods({
     setForm(f);
     setDirty(true);
     setChecked(false);
+    setAcceptUnmatched(false);
     setPreview(null);
   };
   const addBag = () => {
@@ -140,6 +151,7 @@ export function IncomingGoods({
     setPreview(d.state === "confirmed" ? d.result?.allocation || null : null);
     setDirty(false);
     setChecked(false);
+    setAcceptUnmatched(false);
     setAngle(0);
     setZoom(100);
     setImageIndex(0);
@@ -190,6 +202,7 @@ export function IncomingGoods({
       setDirty(false);
       setPreview(null);
       setChecked(false);
+      setAcceptUnmatched(false);
       await reload();
       setMessage(
         "Đã lưu nháp. Chưa ghi nhận hàng; bấm Tự động cộng dồn lại khi cần xác nhận.",
@@ -198,16 +211,13 @@ export function IncomingGoods({
   const allocate = () =>
     act(async () => {
       const f = validForm();
-      if (f.rows.some((r) => (r.qty || 0) > 0 && !r.variantId))
-        throw Error(
-          "Chọn đúng mã–màu–size từ danh sách lệnh sản xuất cho các dòng có hàng",
-        );
       const plan = await send(`/api/incoming/${draft.id}/allocate`, {
         expectedVersion: draft.version,
         form: f,
       });
       setPreview(plan);
       setChecked(false);
+      setAcceptUnmatched(false);
       setMessage(
         plan.remaining
           ? `Còn ${fmt(plan.remaining)} sản phẩm chưa phân bổ. Xem lý do bên dưới.`
@@ -220,14 +230,25 @@ export function IncomingGoods({
       if (!checked)
         throw Error("Cần xác nhận đã kiểm tra số lượng và phân bổ lệnh");
       const positive = f.rows.filter((r) => (r.qty || 0) > 0);
-      const auto = positive.some((r) => r.allocationMode === "auto");
+      const auto = positive.some(
+        (r) => r.allocationMode === "auto" || r.allocationMode === "unmatched",
+      );
       if (
         f.rows.some((r) => r.qty === null) ||
         !positive.length ||
-        positive.some((r) => !r.variantId)
+        positive.some((r) => !r.sku || !r.color)
       )
         throw Error("Kiểm tra số lượng và chọn đúng mã–màu–size");
-      if (auto && (!preview?.id || preview.remaining))
+      if (
+        auto &&
+        (!preview?.id ||
+          (preview.remaining &&
+            (!acceptUnmatched ||
+              !f.supplier ||
+              preview.unallocated.some(
+                (r: any) => r.canRecordUnmatched === false,
+              ))))
+      )
         throw Error(
           "Bấm Tự động cộng dồn và xử lý hết hàng chưa phân bổ trước khi xác nhận",
         );
@@ -244,6 +265,7 @@ export function IncomingGoods({
         form: f,
         checked: true,
         orders,
+        ...(acceptUnmatched ? { acceptUnmatched: true } : {}),
         ...(auto ? { allocationPreviewId: preview!.id } : {}),
       };
       const ok = await run(async () => {
@@ -252,7 +274,8 @@ export function IncomingGoods({
         setPreview(result.allocation || null);
         setDirty(false);
         setChecked(false);
-      }, "Đã ghi nhận hàng vào các lệnh; tồn kho không thay đổi");
+        setAcceptUnmatched(false);
+      }, "Đã ghi nhận phiếu hàng về");
       if (ok) {
         await reload();
         setMessage(
@@ -277,6 +300,7 @@ export function IncomingGoods({
     return (
       <>
         <h1>Nhập liệu hàng về</h1>
+        <ReceivingDashboard revision={data.orders} onOrder={onOrder} />
         <Notice>
           Cần vai trò Administrator hoặc Warehouse Operator để nhập và ghi nhận
           hàng.
@@ -285,7 +309,9 @@ export function IncomingGoods({
     );
   const locked = busy || draft?.state === "confirmed";
   const positive = form.rows.filter((r) => (r.qty || 0) > 0),
-    auto = positive.some((r) => r.allocationMode === "auto");
+    auto = positive.some(
+      (r) => r.allocationMode === "auto" || r.allocationMode === "unmatched",
+    );
   const unknown = form.rows.filter((r) => r.qty === null).length,
     unmatched = incomingMatrix(form.rows)
       .flatMap((b) => b.lines)
@@ -296,7 +322,9 @@ export function IncomingGoods({
           Object.values(l.cells).some(
             (r) =>
               (r.qty || 0) > 0 &&
-              (!r.variantId || (r.allocationMode !== "auto" && !r.orderId)),
+              r.allocationMode !== "auto" &&
+              r.allocationMode !== "unmatched" &&
+              !r.orderId,
           ),
       ).length;
   const total = form.rows.reduce((n, r) => n + (r.qty || 0), 0);
@@ -325,6 +353,7 @@ export function IncomingGoods({
           {message}
         </div>
       )}
+      <ReceivingDashboard revision={data.orders} onOrder={viewOrder} />
       <section className="incoming-panel">
         <h2>1. Ảnh phiếu kiểm</h2>
         <Field label="Ảnh phiếu kiểm kho">
@@ -453,9 +482,12 @@ export function IncomingGoods({
                   />
                 </Field>
                 <Field label="Nhà xưởng trả hàng">
-                  <select
+                  <input
+                    aria-label="Nhà xưởng trả hàng"
+                    list="incoming-factories"
                     value={form.supplier || ""}
                     disabled={locked}
+                    placeholder="Chọn hoặc nhập tên xưởng"
                     onChange={(e) =>
                       edit({
                         ...form,
@@ -467,14 +499,12 @@ export function IncomingGoods({
                         })),
                       })
                     }
-                  >
-                    <option value="">
-                      Chưa chọn — tự khớp khi chỉ có một xưởng
-                    </option>
+                  />
+                  <datalist id="incoming-factories">
                     {suppliers.map((s) => (
-                      <option key={s}>{s}</option>
+                      <option key={s} value={s} />
                     ))}
-                  </select>
+                  </datalist>
                 </Field>
                 <Field label="Ghi chú phiếu">
                   <textarea
@@ -518,8 +548,9 @@ export function IncomingGoods({
               <p>
                 Mỗi bao nhập số một lần; các dòng màu bên dưới thuộc bao đó.
                 Điền trực tiếp vào cột S/M/L/XL, ô trống của dòng mới tính là 0.
-                Size không có trong lệnh sẽ khóa. Lệnh nhận hoặc giao dư có thể
-                chọn riêng từng size.
+                Size chưa có trong lệnh vẫn nhập được và có thể lưu vào hàng
+                chưa đối chiếu. Lệnh nhận hoặc giao dư có thể chọn riêng từng
+                size.
               </p>
               <IncomingBagTable
                 rows={form.rows}
@@ -593,7 +624,8 @@ export function IncomingGoods({
                       <b>{fmt(displayedPreview.allocated)}</b> đã phân bổ
                     </span>
                     <span>
-                      <b>{fmt(displayedPreview.remaining)}</b> chưa phân bổ
+                      <b>{fmt(displayedPreview.remaining)}</b> chưa đối chiếu
+                      lệnh
                     </span>
                     <span>
                       <b>{fmt(displayedPreview.excess)}</b> giao dư đã chọn lệnh
@@ -687,12 +719,44 @@ export function IncomingGoods({
               )}
               {draft.state === "draft" && (
                 <div className="incoming-confirm">
+                  {auto && !!preview?.remaining && (
+                    <Notice>
+                      <label>
+                        <input
+                          type="checkbox"
+                          aria-label="Đồng ý lưu hàng chưa đối chiếu lệnh"
+                          checked={acceptUnmatched}
+                          disabled={
+                            busy ||
+                            preview.unallocated.some(
+                              (r: any) => r.canRecordUnmatched === false,
+                            )
+                          }
+                          onChange={(e) => {
+                            setAcceptUnmatched(e.target.checked);
+                            setChecked(false);
+                          }}
+                        />{" "}
+                        Tôi xác nhận lưu {fmt(preview.remaining)} sản phẩm vào
+                        “Chưa đối chiếu lệnh”. Cần điền nhà xưởng; phần này
+                        không tự trừ nợ lệnh hoặc cộng tồn kho.
+                      </label>
+                    </Notice>
+                  )}
                   <label>
                     <input
                       type="checkbox"
                       checked={checked}
                       disabled={
-                        busy || (auto && (!preview || !!preview.remaining))
+                        busy ||
+                        (auto &&
+                          (!preview ||
+                            (!!preview.remaining &&
+                              (!acceptUnmatched ||
+                                !form.supplier ||
+                                preview.unallocated.some(
+                                  (r: any) => r.canRecordUnmatched === false,
+                                )))))
                       }
                       onChange={(e) => setChecked(e.target.checked)}
                     />{" "}
@@ -713,7 +777,14 @@ export function IncomingGoods({
                         !positive.length ||
                         !!unknown ||
                         !!unmatched ||
-                        (auto && (!preview?.id || !!preview.remaining))
+                        (auto &&
+                          (!preview?.id ||
+                            (!!preview.remaining &&
+                              (!acceptUnmatched ||
+                                !form.supplier ||
+                                preview.unallocated.some(
+                                  (r: any) => r.canRecordUnmatched === false,
+                                )))))
                       }
                       onClick={() => void confirm()}
                     >
@@ -729,7 +800,9 @@ export function IncomingGoods({
               {draft.result && (
                 <Notice>
                   <span>
-                    Đã nhận {fmt(draft.result.received)} sản phẩm.
+                    Đã nhận {fmt(draft.result.received)} sản phẩm. Đã đối chiếu{" "}
+                    {fmt(draft.result.matchedReceived ?? draft.result.received)}{" "}
+                    · Chưa đối chiếu {fmt(draft.result.unmatchedReceived || 0)}.
                     {draft.result.receipts.map((r: any) => (
                       <p key={r.receiptId}>
                         <button

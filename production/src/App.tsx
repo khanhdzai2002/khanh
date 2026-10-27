@@ -521,7 +521,7 @@ function Dashboard({
       icon: Factory,
     },
     {
-      label: "Xưởng đã giao",
+      label: "Đã nhận theo lệnh",
       value: fmt(orders.reduce((n, o) => n + totals(o).received, 0)),
       note: "Không tự cộng vào tồn kho",
       icon: PackageCheck,

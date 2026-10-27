@@ -41,11 +41,11 @@ export function incomingAllocation(
   const matching = (o: ProductionOrder, r: IncomingRow) =>
     o.items.find(
       (i) =>
-        i.variantId === r.variantId &&
+        (!r.variantId || i.variantId === r.variantId) &&
         i.size === r.size &&
         isActiveSize(i.size) &&
         normalizeLabel(i.sku) === normalizeLabel(r.sku) &&
-        (r.allocationMode !== "auto" ||
+        ((r.allocationMode !== "auto" && !!r.variantId) ||
           normalizeLabel(i.color) === normalizeLabel(r.color)),
     );
   const fifo = [...active].sort(
@@ -64,8 +64,14 @@ export function incomingAllocation(
     size: string;
     qty: number;
     reason: string;
+    canRecordUnmatched: boolean;
   }[] = [];
-  const missing = (r: IncomingRow, qty: number, reason: string) =>
+  const missing = (
+    r: IncomingRow,
+    qty: number,
+    reason: string,
+    canRecordUnmatched = true,
+  ) =>
     unallocated.push({
       rowId: r.id,
       sku: r.sku,
@@ -73,6 +79,7 @@ export function incomingAllocation(
       size: r.size,
       qty,
       reason,
+      canRecordUnmatched,
     });
   const add = (o: ProductionOrder, r: IncomingRow, qty: number) => {
     const i = matching(o, r)!;
@@ -99,7 +106,9 @@ export function incomingAllocation(
   };
   // Reserve explicit manual entries first so automatic rows never use the same
   // outstanding capacity twice, regardless of table row order.
-  for (const r of positive.filter((r) => r.allocationMode !== "auto")) {
+  for (const r of positive.filter(
+    (r) => r.allocationMode !== "auto" && r.allocationMode !== "unmatched",
+  )) {
     const o = active.find(
       (o) =>
         o.id === r.orderId &&
@@ -112,6 +121,7 @@ export function incomingAllocation(
         r,
         r.qty!,
         "Chọn đúng lệnh nhận có cùng mã–màu–size và nhà xưởng",
+        false,
       );
   }
   for (const r of positive.filter((r) => r.allocationMode === "auto")) {
@@ -125,6 +135,7 @@ export function incomingAllocation(
         r,
         r.qty!,
         "SKU có lệnh ở nhiều xưởng. Chọn Nhà xưởng trả hàng trước khi tự động cộng dồn",
+        false,
       );
       continue;
     }
@@ -157,16 +168,33 @@ export function incomingAllocation(
           : "Không có lệnh phù hợp. Kiểm tra mã–màu–size, xưởng và tùy chọn Nháp/Tạm dừng",
       );
   }
+  for (const r of positive.filter((r) => r.allocationMode === "unmatched"))
+    missing(
+      r,
+      r.qty!,
+      "Nhân viên chọn ghi nhận chưa đối chiếu lệnh (hàng sửa / lô cũ / chưa có lệnh trên app)",
+    );
   const ids = [...new Set(allocations.map((a) => a.orderId))].sort();
   if (ids.length > 200 || allocations.length > 1000)
     throw new AppError(
       400,
       "Phiếu quá lớn. Chia thành các phiếu nhỏ hơn (tối đa 200 lệnh / 1.000 dòng phân bổ)",
     );
-  const balances = [...new Set(positive.map((r) => r.variantId))]
+  const balances = [
+    ...new Set([
+      ...positive.map((r) => r.variantId),
+      ...allocations.map((a) => a.variantId),
+    ]),
+  ]
     .filter(Boolean)
     .flatMap((variantId) => {
-      const rows = positive.filter((r) => r.variantId === variantId);
+      const rows = positive.filter(
+        (r) =>
+          r.variantId === variantId ||
+          allocations.some(
+            (a) => a.variantId === variantId && a.sourceRowId === r.id,
+          ),
+      );
       const related = active
         .filter(
           (o) =>
@@ -226,7 +254,20 @@ export function incomingAllocationSnapshot(
   // Include excluded/cancelled/deleted candidates too: a status change, new
   // matching order or changed quantities must invalidate the preview.
   return orders
-    .filter((o) => o.items.some((i) => variants.has(i.variantId)))
+    .filter((o) =>
+      o.items.some(
+        (i) =>
+          variants.has(i.variantId) ||
+          form.rows.some(
+            (r) =>
+              (r.qty || 0) > 0 &&
+              !r.variantId &&
+              r.size === i.size &&
+              normalizeLabel(r.sku) === normalizeLabel(i.sku) &&
+              normalizeLabel(r.color) === normalizeLabel(i.color),
+          ),
+      ),
+    )
     .sort((a, b) => a.id.localeCompare(b.id))
     .map((o) => ({
       id: o.id,

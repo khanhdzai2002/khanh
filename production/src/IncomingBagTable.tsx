@@ -62,6 +62,8 @@ export function IncomingBagTable({
   onOrder: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [customSku, setCustomSku] = useState<Record<string, boolean>>({}),
+    [customColor, setCustomColor] = useState<Record<string, boolean>>({});
   const grouped = withIncomingGroups(rows),
     bags = incomingMatrix(grouped);
   const codes = [...new Set(variants.map((v) => v.sku))].sort((a, b) =>
@@ -205,6 +207,15 @@ export function IncomingBagTable({
                 ].sort((a, b) => a.localeCompare(b, "vi"));
                 const total = cells.reduce((n, r) => n + (r.qty || 0), 0);
                 const allAuto = cells.every((r) => r.allocationMode === "auto");
+                const allUnmatched = cells.every(
+                  (r) => r.allocationMode === "unmatched",
+                );
+                const freeSku =
+                    customSku[line.id] ||
+                    (!!line.sku && !codes.includes(line.sku)),
+                  freeColor =
+                    customColor[line.id] ||
+                    (!!line.color && !colors.includes(line.color));
                 const unresolved =
                   !line.sku ||
                   !line.color ||
@@ -212,8 +223,9 @@ export function IncomingBagTable({
                     (r) =>
                       r.qty === null ||
                       ((r.qty || 0) > 0 &&
-                        (!r.variantId ||
-                          (r.allocationMode !== "auto" && !r.orderId))),
+                        r.allocationMode !== "auto" &&
+                        r.allocationMode !== "unmatched" &&
+                        !r.orderId),
                   );
                 const show = !!expanded[line.id];
                 const pick = (sku: string, color: string) =>
@@ -241,11 +253,22 @@ export function IncomingBagTable({
                         <span aria-hidden="true">↳</span>
                         <select
                           aria-label={`Mã ${label}`}
-                          value={line.sku}
+                          value={freeSku ? "__custom__" : line.sku}
                           disabled={disabled}
-                          onChange={(e) => pick(e.target.value, "")}
+                          onChange={(e) => {
+                            if (e.target.value === "__custom__") {
+                              setCustomSku((s) => ({ ...s, [line.id]: true }));
+                              pick("", "");
+                            } else {
+                              setCustomSku((s) => ({ ...s, [line.id]: false }));
+                              pick(e.target.value, "");
+                            }
+                          }}
                         >
                           <option value="">Chọn mã sản phẩm</option>
+                          <option value="__custom__">
+                            Nhập mã chưa có trên app…
+                          </option>
                           {line.sku && !codes.includes(line.sku) && (
                             <option value={line.sku}>
                               {line.sku} — chọn lại mã
@@ -255,15 +278,44 @@ export function IncomingBagTable({
                             <option key={c}>{c}</option>
                           ))}
                         </select>
+                        {freeSku && (
+                          <input
+                            aria-label={`Mã nhập tay ${label}`}
+                            maxLength={90}
+                            placeholder="Mã sản phẩm thực nhận"
+                            value={line.sku}
+                            disabled={disabled}
+                            onChange={(e) =>
+                              pick(e.target.value.toUpperCase(), line.color)
+                            }
+                          />
+                        )}
                       </td>
                       <td>
                         <select
                           aria-label={`Màu ${label}`}
-                          value={line.color}
+                          value={freeColor ? "__custom__" : line.color}
                           disabled={disabled || !line.sku}
-                          onChange={(e) => pick(line.sku, e.target.value)}
+                          onChange={(e) => {
+                            if (e.target.value === "__custom__") {
+                              setCustomColor((s) => ({
+                                ...s,
+                                [line.id]: true,
+                              }));
+                              pick(line.sku, "");
+                            } else {
+                              setCustomColor((s) => ({
+                                ...s,
+                                [line.id]: false,
+                              }));
+                              pick(line.sku, e.target.value);
+                            }
+                          }}
                         >
                           <option value="">Chọn màu của mã</option>
+                          <option value="__custom__">
+                            Nhập màu chưa có trên app…
+                          </option>
                           {line.color && !colors.includes(line.color) && (
                             <option value={line.color}>
                               {line.color} — chọn lại màu
@@ -273,6 +325,16 @@ export function IncomingBagTable({
                             <option key={c}>{c}</option>
                           ))}
                         </select>
+                        {freeColor && (
+                          <input
+                            aria-label={`Màu nhập tay ${label}`}
+                            maxLength={200}
+                            placeholder="Tên màu thực nhận"
+                            value={line.color}
+                            disabled={disabled}
+                            onChange={(e) => pick(line.sku, e.target.value)}
+                          />
+                        )}
                       </td>
                       {sizes.map((size) => {
                         const cell = line.cells[size];
@@ -290,17 +352,13 @@ export function IncomingBagTable({
                               min="0"
                               max="1000000"
                               step="1"
-                              disabled={
-                                disabled ||
-                                (!available &&
-                                  !(cell?.qty || cell?.qty === null))
-                              }
+                              disabled={disabled}
                               value={cell?.qty || ""}
-                              placeholder={available ? "0" : "—"}
+                              placeholder="0"
                               title={
                                 available
                                   ? "Để trống tính là 0"
-                                  : "Size chưa có trong lệnh; không được nhập hàng mới"
+                                  : "Vẫn nhập được; chưa có SKU/lệnh tương ứng sẽ lưu Chưa đối chiếu lệnh sau xác nhận"
                               }
                               onChange={(e) =>
                                 patchCell(line, size, {
@@ -318,7 +376,7 @@ export function IncomingBagTable({
                             )}
                             {(cell?.qty || 0) > 0 && !cell?.variantId && (
                               <small className="orange-text">
-                                Chọn lại mã/màu
+                                Chưa có SKU/lệnh
                               </small>
                             )}
                           </td>
@@ -328,15 +386,21 @@ export function IncomingBagTable({
                       <td>
                         <select
                           aria-label={`Cách nhận ${label}`}
-                          value={allAuto ? "auto" : "manual"}
+                          value={
+                            allAuto
+                              ? "auto"
+                              : allUnmatched
+                                ? "unmatched"
+                                : "manual"
+                          }
                           disabled={disabled}
                           onChange={(e) => {
                             updateLine(line, (r) => ({
                               ...r,
                               allocationMode: e.target.value as
-                                "auto" | "manual",
+                                "auto" | "manual" | "unmatched",
                               orderId:
-                                e.target.value === "auto" ? null : r.orderId,
+                                e.target.value === "manual" ? r.orderId : null,
                               excessOrderId: null,
                             }));
                             if (e.target.value === "manual")
@@ -344,6 +408,7 @@ export function IncomingBagTable({
                           }}
                         >
                           <option value="auto">Tự động cộng dồn</option>
+                          <option value="unmatched">Chưa đối chiếu lệnh</option>
                           <option value="manual">
                             Chọn lệnh theo từng size
                           </option>
@@ -412,19 +477,24 @@ export function IncomingBagTable({
                                     value={
                                       cell.allocationMode === "auto"
                                         ? "auto"
-                                        : cell.orderId || ""
+                                        : cell.allocationMode === "unmatched"
+                                          ? "unmatched"
+                                          : cell.orderId || ""
                                     }
-                                    disabled={disabled || !cell.variantId}
+                                    disabled={disabled}
                                     onChange={(e) =>
                                       patchCell(line, size, {
                                         allocationMode:
                                           e.target.value === "auto"
                                             ? "auto"
-                                            : "manual",
-                                        orderId:
-                                          e.target.value === "auto"
-                                            ? null
-                                            : e.target.value || null,
+                                            : e.target.value === "unmatched"
+                                              ? "unmatched"
+                                              : "manual",
+                                        orderId: ["auto", "unmatched"].includes(
+                                          e.target.value,
+                                        )
+                                          ? null
+                                          : e.target.value || null,
                                         excessOrderId: null,
                                       })
                                     }
@@ -432,6 +502,9 @@ export function IncomingBagTable({
                                     <option value="">Chọn lệnh thủ công</option>
                                     <option value="auto">
                                       Tự động cộng dồn
+                                    </option>
+                                    <option value="unmatched">
+                                      Chưa đối chiếu lệnh
                                     </option>
                                     {options.map((o) => {
                                       const i = o.items.find(
@@ -458,7 +531,7 @@ export function IncomingBagTable({
                                       <select
                                         aria-label={`Lệnh nhận dư ${size} ${label}`}
                                         value={cell.excessOrderId || ""}
-                                        disabled={disabled || !cell.variantId}
+                                        disabled={disabled}
                                         onChange={(e) =>
                                           patchCell(line, size, {
                                             excessOrderId:

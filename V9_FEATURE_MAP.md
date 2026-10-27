@@ -136,3 +136,7 @@ Giới hạn V9 nhận không vượt còn chờ được thay bằng [chính s�
 ## Nhập hàng theo bao và ma trận size
 
 Theo yêu cầu vận hành, phiếu hàng về hiển thị Bao → dòng mã/màu thụt lề → bốn cột S/M/L/XL. Số bao chỉ nhập một lần; thêm màu kế thừa bao; tổng size/dòng/bao/phiếu. Giữ dòng SKU và lệnh riêng từng ô tại backend, không đổi thuật toán FIFO hoặc ghi lại biên nhận cũ.
+
+## Hàng nhận chưa đối chiếu và dashboard hàng về
+
+Theo yêu cầu mới: mở nhập cả S/M/L/XL khi chưa có SKU/lệnh; lưu riêng hàng đã nhận chưa đối chiếu sau xác nhận, không tạo lệnh giả/trừ nợ/cộng tồn. Dashboard hàng về đọc biên nhận theo lệnh và sổ chưa đối chiếu một lần, có tỷ trọng, màu/size, kỳ nhận và bảng nợ hiện tại. Migrations010–011 bảo toàn lịch sử và xưởng của biên nhận mới.
