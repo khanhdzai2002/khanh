@@ -66,6 +66,7 @@ import {
 import { bulkOrderStatus } from "./bulk-order-status";
 import { salesFileSchema } from "../shared/sales-file";
 import { incomingRouter } from "./incoming-goods";
+import { productProfilesRouter } from "./product-profiles";
 const PgStore = connectPg(session);
 export function makeApp() {
   const app = express(),
@@ -152,6 +153,7 @@ export function makeApp() {
     }),
   );
   app.use("/api/incoming", incomingRouter);
+  app.use("/api/product-profiles", productProfilesRouter);
   app.get("/api/dashboard", async (_req, res) => res.json(await dashboard()));
   app.get("/api/account", async (req, res) => {
     res.json(await initialAdminStatus(pool, req.actor!.id));
@@ -771,6 +773,7 @@ export function makeApp() {
           "Người đặt",
           "Trạng thái",
           "Ghi chú",
+          "Loại hàng",
         ],
         ...all.flatMap((o) =>
           o.items
@@ -791,6 +794,7 @@ export function makeApp() {
               o.requestedBy,
               totals(o).status,
               o.notes,
+              i.goodsType || "Chưa chọn",
             ]),
         ),
       ];
@@ -813,6 +817,7 @@ export function makeApp() {
             "Còn chờ",
             "Giao dư",
             "Tiến độ (%)",
+            "Loại hàng",
           ],
         ];
         for (const order of all) {
@@ -856,6 +861,9 @@ export function makeApp() {
               items.reduce((n, i) => n + Math.max(0, i.received - i.qty), 0),
               (100 * items.reduce((n, i) => n + i.received, 0)) /
                 items.reduce((n, i) => n + i.qty, 0),
+              [...new Set(items.map((i) => i.goodsType || "Chưa chọn"))].join(
+                " / ",
+              ),
             ]);
           }
         }

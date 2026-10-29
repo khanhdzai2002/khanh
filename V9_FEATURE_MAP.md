@@ -140,3 +140,7 @@ Theo yêu cầu vận hành, phiếu hàng về hiển thị Bao → dòng mã/m
 ## Hàng nhận chưa đối chiếu và dashboard hàng về
 
 Theo yêu cầu mới: mở nhập cả S/M/L/XL khi chưa có SKU/lệnh; lưu riêng hàng đã nhận chưa đối chiếu sau xác nhận, không tạo lệnh giả/trừ nợ/cộng tồn. Dashboard hàng về đọc biên nhận theo lệnh và sổ chưa đối chiếu một lần, có tỷ trọng, màu/size, kỳ nhận và bảng nợ hiện tại. Migrations010–011 bảo toàn lịch sử và xưởng của biên nhận mới.
+
+## Ảnh theo mã và loại hàng In/Trơn
+
+Menu Thiết lập sản phẩm quản lý ảnh/loại mặc định dùng chung cho màu–size. Dự kiến, lập/chỉnh sửa và xem/in lệnh có ảnh thu nhỏ/phóng to; loại theo dòng lệnh được lưu riêng và xuất CSV/Excel. Không đổi số lượng/công thức hoặc tự gán loại cho chứng từ cũ. Xem [hướng dẫn ảnh sản phẩm](production/docs/PRODUCT_PROFILES.md). Migration012 lưu PostgreSQL, không cần dịch vụ ngoài.

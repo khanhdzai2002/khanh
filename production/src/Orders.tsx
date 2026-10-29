@@ -15,6 +15,8 @@ import {
   sizes,
   isActiveSize,
   priorities,
+  goodsTypes,
+  type GoodsType,
   statuses,
   forecast,
   skuSchema,
@@ -41,6 +43,8 @@ import { ProductionReport } from "./ProductionReport";
 import { BulkOrderStatus } from "./BulkOrderStatus";
 import { PriorityBadge, highestPriority, priorityClass } from "./Priority";
 import type { Snapshot } from "./App";
+import { productFor, type ProductProfile } from "../shared/product-profiles";
+import { ProductPhoto } from "./ProductPhoto";
 export function Orders({
   data,
   page,
@@ -534,6 +538,7 @@ export function Orders({
       {selectedOrder && (
         <OrderDetail
           order={selectedOrder}
+          products={data.products || []}
           actor={actor}
           run={run}
           busy={busy}
@@ -627,6 +632,8 @@ function OrderEditor({
   run: Run;
   onClose: () => void;
 }) {
+  const defaultType = (sku: string) =>
+    productFor(data.products || [], sku)?.goodsType || null;
   const [form, setForm] = useState<OrderInput>({
     code: order?.code,
     time: order?.time || new Date().toISOString(),
@@ -641,10 +648,12 @@ function OrderEditor({
           variantId: i.variantId,
           qty: i.qty,
           priority: i.priority as any,
+          goodsType: i.goodsType ?? null,
         }))
       : seed.map((s) => ({
           variantId: s.id,
           qty: forecast(s, data.policy).need,
+          goodsType: defaultType(s.sku),
           priority:
             forecast(s, data.policy).flag === "critical"
               ? "CẤP BÁCH"
@@ -754,7 +763,13 @@ function OrderEditor({
           old.qty += qty;
           if (priority === "CẤP BÁCH" || old.priority === "THƯỜNG")
             old.priority = priority;
-        } else list.push({ variantId: variant.id, qty, priority });
+        } else
+          list.push({
+            variantId: variant.id,
+            qty,
+            priority,
+            goodsType: defaultType(sku),
+          });
       }
     setDraftSkus([...draftSkus, ...created]);
     setForm({ ...form, items: list });
@@ -795,7 +810,15 @@ function OrderEditor({
           const old = list.find((i) => i.variantId === variantId);
           if (old) {
             old.qty = qty;
-          } else if (qty > 0) list.push({ variantId, qty, priority: "THƯỜNG" });
+          } else if (qty > 0)
+            list.push({
+              variantId,
+              qty,
+              priority: "THƯỜNG",
+              goodsType: group.items.length
+                ? (group.items[0].goodsType ?? null)
+                : defaultType(group.sku),
+            });
           patch("items", list);
         }}
       />
@@ -946,7 +969,9 @@ function OrderEditor({
           <table>
             <thead>
               <tr>
+                <th>Ảnh</th>
                 <th>Mã SP</th>
+                <th>Loại hàng</th>
                 <th>Màu</th>
                 {sizes.map((s) => (
                   <th key={s}>{s}</th>
@@ -959,7 +984,7 @@ function OrderEditor({
             <tbody>
               {!groups.size && (
                 <tr>
-                  <td colSpan={sizes.length + 5} className="muted">
+                  <td colSpan={sizes.length + 7} className="muted">
                     Lệnh chưa có sản phẩm. Thêm từ danh mục hoặc nhập mã/màu mới
                     bên dưới.
                   </td>
@@ -967,7 +992,47 @@ function OrderEditor({
               )}
               {[...groups.entries()].map(([key, g]) => (
                 <tr key={key}>
+                  <td>
+                    <ProductPhoto products={data.products || []} sku={g.sku} />
+                  </td>
                   <td className="product-code">{g.sku}</td>
+                  <td>
+                    <select
+                      aria-label={"Loại hàng " + g.sku + " " + g.color}
+                      disabled={busy || (!!order?.cancelled && !reopen)}
+                      value={
+                        g.items.every(
+                          (i) =>
+                            (i.goodsType ?? null) ===
+                            (g.items[0]?.goodsType ?? null),
+                        )
+                          ? g.items[0]?.goodsType || ""
+                          : "__mixed__"
+                      }
+                      onChange={(e) =>
+                        patch(
+                          "items",
+                          form.items.map((i) =>
+                            g.items.includes(i)
+                              ? {
+                                  ...i,
+                                  goodsType: (e.target.value ||
+                                    null) as GoodsType | null,
+                                }
+                              : i,
+                          ),
+                        )
+                      }
+                    >
+                      <option value="">Chưa chọn</option>
+                      <option value="__mixed__" disabled>
+                        Khác nhau theo size
+                      </option>
+                      {goodsTypes.map((t) => (
+                        <option key={t}>{t}</option>
+                      ))}
+                    </select>
+                  </td>
                   <td className="color-cell">{g.color}</td>
                   {sizes.map((size) => (
                     <td key={size}>{sizeCell(g, size)}</td>
@@ -1028,7 +1093,7 @@ function OrderEditor({
             </tbody>
             <tfoot>
               <tr>
-                <th colSpan={2}>TỔNG CỘNG</th>
+                <th colSpan={4}>TỔNG CỘNG</th>
                 {sizes.map((size) => (
                   <th key={size}>
                     {fmt(
@@ -1131,6 +1196,22 @@ function OrderEditor({
                     ))}
                   </select>
                 </Field>
+              )}
+              {(manual ? newCode.trim() : code) && (
+                <div className="product-picker-preview">
+                  <ProductPhoto
+                    products={data.products || []}
+                    sku={manual ? newCode.trim() : code}
+                  />
+                  <span>
+                    {manual ? newCode.trim().toUpperCase() : code}
+                    <small>
+                      Loại mặc định:{" "}
+                      {defaultType(manual ? newCode.trim() : code) ||
+                        "Chưa thiết lập"}
+                    </small>
+                  </span>
+                </div>
               )}
               <Field label="Ưu tiên">
                 <select
@@ -1269,6 +1350,7 @@ function OrderEditor({
 }
 function OrderDetail({
   order,
+  products,
   actor,
   run,
   busy,
@@ -1277,6 +1359,7 @@ function OrderDetail({
   action,
 }: {
   order: ProductionOrder;
+  products: ProductProfile[];
   actor: { role: Role };
   run: Run;
   busy: boolean;
@@ -1428,7 +1511,9 @@ function OrderDetail({
             <thead>
               <tr>
                 {[
+                  "Ảnh",
                   "Mã SP",
+                  "Loại hàng",
                   "Màu",
                   "Size",
                   "Ưu tiên",
@@ -1445,7 +1530,19 @@ function OrderDetail({
             <tbody>
               {order.items.map((i) => (
                 <tr key={i.id}>
+                  <td>
+                    <ProductPhoto products={products} sku={i.sku} />
+                  </td>
                   <td className="product-code">{i.sku}</td>
+                  <td>
+                    <span
+                      className={
+                        "badge " + (i.goodsType === "In" ? "orange" : "")
+                      }
+                    >
+                      {i.goodsType || "Chưa chọn"}
+                    </span>
+                  </td>
                   <td className="color-cell">{i.color}</td>
                   <td>{i.size}</td>
                   <td>

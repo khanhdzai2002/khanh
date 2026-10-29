@@ -16,6 +16,7 @@ import {
   PackageCheck,
   Clock,
   ChevronRight,
+  ImageIcon,
 } from "lucide-react";
 import { api, send, setCsrf } from "./api";
 import { fmt, Empty, Notice, ActionFeedback, type Run } from "./ui";
@@ -35,8 +36,11 @@ import { Sales } from "./Sales";
 import { SettingsPage } from "./Settings";
 import { IncomingGoods } from "./IncomingGoods";
 import { AccountsPage } from "./Accounts";
+import { ProductProfiles } from "./ProductProfiles";
+import type { ProductProfile } from "../shared/product-profiles";
 export type Snapshot = {
   skus: Variant[];
+  products: ProductProfile[];
   orders: ProductionOrder[];
   policy: Policy;
   policyVersion: number;
@@ -49,6 +53,7 @@ const pages = [
   { id: "history", name: "Lịch sử & giao nhận", icon: History },
   { id: "sales", name: "Phân tích bán hàng", icon: ChartNoAxesCombined },
   { id: "archived", name: "Lệnh đã xóa", icon: Trash2 },
+  { id: "products", name: "Thiết lập sản phẩm", icon: ImageIcon },
   { id: "accounts", name: "Thiết lập tài khoản", icon: UsersRound },
   { id: "settings", name: "Cấu hình & dữ liệu", icon: Settings },
 ];
@@ -424,6 +429,14 @@ export default function App() {
                 role={user.role}
                 busy={busy}
                 onSetup={() => navigate("settings")}
+              />
+            )}
+            {page === "products" && (
+              <ProductProfiles
+                products={data.products || []}
+                writable={planner}
+                busy={busy}
+                run={run}
               />
             )}
             {page === "settings" && (

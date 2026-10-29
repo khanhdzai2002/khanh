@@ -21,6 +21,8 @@ import { SupplyActions } from "./SupplyActions";
 import type { Snapshot } from "./App";
 import { send, fileBase64 } from "./api";
 import { Empty, Modal, Field, Notice, fmt, type Run } from "./ui";
+import { ProductPhoto } from "./ProductPhoto";
+import { productFor } from "../shared/product-profiles";
 export function Planning({
   data,
   selected,
@@ -280,7 +282,9 @@ export function Planning({
                     />
                   </th>
                   {[
+                    "Ảnh",
                     "Mã SP",
+                    "Loại mặc định",
                     "Màu / phối màu",
                     "Size",
                     "Bán ngày 1",
@@ -331,9 +335,19 @@ export function Planning({
                           }
                         />
                       </td>
+                      <td>
+                        <ProductPhoto
+                          products={data.products || []}
+                          sku={s.sku}
+                        />
+                      </td>
                       <td className="product-code">
                         {s.sku}
                         <small>{s.name}</small>
+                      </td>
+                      <td>
+                        {productFor(data.products || [], s.sku)?.goodsType ||
+                          "Chưa thiết lập"}
                       </td>
                       <td className="color-cell">{s.color}</td>
                       <td>

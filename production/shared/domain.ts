@@ -5,6 +5,8 @@ export const historicalSizes = ["XS", ...sizes, "2XL"] as const;
 export const isActiveSize = (size: string) =>
   (sizes as readonly string[]).includes(size);
 export const priorities = ["THƯỜNG", "ƯU TIÊN", "CẤP BÁCH"] as const;
+export const goodsTypes = ["In", "Trơn"] as const;
+export type GoodsType = (typeof goodsTypes)[number];
 export const statuses = [
   "Nháp",
   "Đã gửi xưởng",
@@ -137,6 +139,7 @@ export const orderItemSchema = z
     variantId: z.uuid(),
     qty: z.number().int().min(1).max(1000000),
     priority: z.enum(priorities),
+    goodsType: z.enum(goodsTypes).nullable().optional(),
   })
   .strict();
 export const orderSchema = z
@@ -161,6 +164,7 @@ export type OrderItem = {
   qty: number;
   received: number;
   priority: string;
+  goodsType?: GoodsType | null;
 };
 export type ProductionOrder = {
   id: string;

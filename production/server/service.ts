@@ -1,6 +1,7 @@
 import { randomUUID, createHash } from "node:crypto";
 import { z } from "zod";
 import { pool, transaction, audit, type DB } from "./db";
+import { listProductProfiles } from "./product-profiles";
 import {
   AppError,
   isActiveSize,
@@ -45,6 +46,7 @@ export async function loadOrder(
       qty: i.qty,
       received: i.received,
       priority: i.priority,
+      goodsType: i.goods_type,
     })),
   };
 }
@@ -227,9 +229,10 @@ export async function createOrder(db: DB, actor: Actor, raw: unknown) {
   if (input.items.some((i) => i.id))
     throw new AppError(400, "Dòng mới không được có ID cũ");
   const selectedVariants = (
-    await db.query("SELECT id,size FROM variants WHERE id=ANY($1::uuid[])", [
-      input.items.map((i) => i.variantId),
-    ])
+    await db.query(
+      "SELECT v.id,v.size,p.goods_type FROM variants v LEFT JOIN product_profiles p ON p.product_id=v.product_id WHERE v.id=ANY($1::uuid[])",
+      [input.items.map((i) => i.variantId)],
+    )
   ).rows;
   if (
     selectedVariants.length !== input.items.length ||
@@ -255,8 +258,18 @@ export async function createOrder(db: DB, actor: Actor, raw: unknown) {
   await reserveCode(db, code, id);
   for (const item of items)
     await db.query(
-      "INSERT INTO production_order_items(id,order_id,variant_id,qty,priority) VALUES($1,$2,$3,$4,$5)",
-      [randomUUID(), id, item.variantId, item.qty, item.priority],
+      "INSERT INTO production_order_items(id,order_id,variant_id,qty,priority,goods_type) VALUES($1,$2,$3,$4,$5,$6)",
+      [
+        randomUUID(),
+        id,
+        item.variantId,
+        item.qty,
+        item.priority,
+        item.goodsType === undefined
+          ? selectedVariants.find((v) => v.id === item.variantId)?.goods_type ||
+            null
+          : item.goodsType,
+      ],
     );
   const order = await loadOrder(db, id);
   await audit(db, actor.id, "order.create", id, order);
@@ -297,9 +310,10 @@ export async function editOrder(
       );
   }
   const targetVariants = (
-    await db.query("SELECT id,size FROM variants WHERE id=ANY($1::uuid[])", [
-      next.items.map((i) => i.variantId),
-    ])
+    await db.query(
+      "SELECT v.id,v.size,p.goods_type FROM variants v LEFT JOIN product_profiles p ON p.product_id=v.product_id WHERE v.id=ANY($1::uuid[])",
+      [next.items.map((i) => i.variantId)],
+    )
   ).rows;
   for (const item of next.items) {
     const v = targetVariants.find((v) => v.id === item.variantId);
@@ -315,6 +329,11 @@ export async function editOrder(
 
   for (const item of next.items) {
     const old = item.id ? original.get(item.id) : undefined;
+    if (item.goodsType === undefined)
+      item.goodsType = old
+        ? (old.goodsType ?? null)
+        : targetVariants.find((v) => v.id === item.variantId)?.goods_type ||
+          null;
     if (item.id && !old) throw new AppError(400, "Dòng không thuộc lệnh này");
     if (
       old &&
@@ -342,6 +361,7 @@ export async function editOrder(
     variantId: i.variantId,
     qty: i.qty,
     priority: i.priority,
+    goodsType: i.goodsType ?? null,
   }));
   if (
     before.cancelled &&
@@ -363,13 +383,13 @@ export async function editOrder(
     const old = i.id ? original.get(i.id) : undefined;
     if (old && (old.received > 0 || !isActiveSize(old.size)))
       await db.query(
-        "UPDATE production_order_items SET qty=$2,priority=$3 WHERE id=$1",
-        [i.id, i.qty, i.priority],
+        "UPDATE production_order_items SET qty=$2,priority=$3,goods_type=$4 WHERE id=$1",
+        [i.id, i.qty, i.priority, i.goodsType],
       );
     else
       await db.query(
-        "INSERT INTO production_order_items(id,order_id,variant_id,qty,priority) VALUES($1,$2,$3,$4,$5)",
-        [i.id || randomUUID(), id, i.variantId, i.qty, i.priority],
+        "INSERT INTO production_order_items(id,order_id,variant_id,qty,priority,goods_type) VALUES($1,$2,$3,$4,$5,$6)",
+        [i.id || randomUUID(), id, i.variantId, i.qty, i.priority, i.goodsType],
       );
   }
   const { items, ...fields } = next;
@@ -565,6 +585,7 @@ export async function dashboard() {
     }));
     return {
       skus,
+      products: await listProductProfiles(db),
       orders,
       policy,
       policyVersion: (
