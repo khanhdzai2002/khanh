@@ -144,3 +144,5 @@ Theo yêu cầu mới: mở nhập cả S/M/L/XL khi chưa có SKU/lệnh; lưu 
 ## Ảnh theo mã và loại hàng In/Trơn
 
 Menu Thiết lập sản phẩm quản lý ảnh/loại mặc định dùng chung cho màu–size. Dự kiến, lập/chỉnh sửa và xem/in lệnh có ảnh thu nhỏ/phóng to; loại theo dòng lệnh được lưu riêng và xuất CSV/Excel. Không đổi số lượng/công thức hoặc tự gán loại cho chứng từ cũ. Xem [hướng dẫn ảnh sản phẩm](production/docs/PRODUCT_PROFILES.md). Migration012 lưu PostgreSQL, không cần dịch vụ ngoài.
+
+Ảnh màu (migration013): mỗi mã–màu có ảnh riêng dùng chung các size. Thiết lập sản phẩm có nhóm màu/tìm kiếm/lọc thiếu ảnh. Dự kiến, lập/sửa và xem/in lệnh chọn ảnh đúng mã + toàn bộ tên màu; thiếu ảnh riêng dùng ảnh chung có nhãn. Giữ nguyên ảnh chung cũ, loại hàng và lịch sử; không nhân bản ảnh ra mỗi size.

@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ImageIcon, X } from "lucide-react";
-import { productFor, type ProductProfile } from "../shared/product-profiles";
+import {
+  productPhotoFor,
+  type ProductProfile,
+} from "../shared/product-profiles";
 function PhotoViewer({
   src,
   sku,
@@ -43,20 +46,23 @@ function PhotoViewer({
 export function ProductPhoto({
   products,
   sku,
+  color,
 }: {
   products: ProductProfile[];
   sku: string;
+  color?: string;
 }) {
   const [open, setOpen] = useState(false),
     [broken, setBroken] = useState(false);
-  const product = productFor(products, sku),
-    src = product?.imageUrl;
+  const photo = productPhotoFor(products, sku, color),
+    src = photo.url,
+    label = sku + (color ? " · " + color : "");
   useEffect(() => {
     setBroken(false);
   }, [src]);
   if (!src || broken)
     return (
-      <span className="product-photo-empty" title={"Chưa có ảnh " + sku}>
+      <span className="product-photo-empty" title={"Chưa có ảnh " + label}>
         <ImageIcon size={20} />
         <small>Chưa có ảnh</small>
       </span>
@@ -66,18 +72,29 @@ export function ProductPhoto({
       <button
         type="button"
         className="product-photo-button"
-        aria-label={"Xem ảnh " + sku}
+        aria-label={"Xem ảnh " + label}
+        title={
+          color
+            ? (photo.source === "color"
+                ? "Ảnh riêng: "
+                : "Đang dùng ảnh chung: ") + label
+            : "Ảnh chung: " + sku
+        }
+        data-photo-source={photo.source}
         onClick={() => setOpen(true)}
       >
         <img
           src={src}
-          alt={"Ảnh " + sku}
+          alt={"Ảnh " + label}
           loading="lazy"
           onError={() => setBroken(true)}
         />
+        {color && photo.source === "common" && (
+          <span className="product-photo-fallback">Ảnh chung</span>
+        )}
       </button>
       {open && (
-        <PhotoViewer src={src} sku={sku} onClose={() => setOpen(false)} />
+        <PhotoViewer src={src} sku={label} onClose={() => setOpen(false)} />
       )}
     </>
   );

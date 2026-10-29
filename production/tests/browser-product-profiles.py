@@ -1,5 +1,5 @@
 """Synthetic _test only: shared photo -> planning/order type -> durable edit, zoom and mobile."""
-import io
+import io,re
 from PIL import Image,ImageDraw
 from playwright.sync_api import sync_playwright,expect
 im=Image.new('RGB',(480,600),'#f2f4f7');d=ImageDraw.Draw(im);d.polygon([(160,110),(105,150),(50,240),(110,285),(145,235),(145,480),(335,480),(335,235),(370,285),(430,240),(375,150),(320,110)],fill='#202124');d.ellipse((200,90,280,150),fill='#f2f4f7');d.text((183,220),'MIU15',fill='#ee741f');d.text((155,525),'SYNTHETIC TEST PRODUCT',fill='#505866');buf=io.BytesIO();im.save(buf,format='PNG')
@@ -15,9 +15,9 @@ with sync_playwright() as p:
  page.get_by_role('button',name='Thiết lập MIU15',exact=True).click();settings=page.get_by_role('dialog',name='Thiết lập MIU15',exact=True)
  settings.get_by_label('Chọn ảnh cho MIU15',exact=True).set_input_files({'name':'synthetic-shirt.png','mimeType':'image/png','buffer':buf.getvalue()});settings.get_by_label('Loại hàng mặc định MIU15',exact=True).select_option('In');settings.get_by_role('button',name='Lưu thiết lập sản phẩm',exact=True).click();expect(settings).not_to_be_visible()
  profiles=page.request.get('http://localhost:5175/api/product-profiles').json();profile=next(x for x in profiles if x['sku']=='MIU15');assert profile['goodsType']=='In' and profile['imageUrl'];photo=page.request.get('http://localhost:5175'+profile['imageUrl']);assert photo.ok and photo.headers['content-type'].startswith('image/jpeg')
- page.get_by_role('button',name='Dự kiến sản xuất',exact=True).click();expect(page.get_by_role('button',name='Xem ảnh MIU15',exact=True)).to_have_count(2);page.get_by_role('button',name='Lên lệnh nhanh',exact=True).click()
+ page.get_by_role('button',name='Dự kiến sản xuất',exact=True).click();expect(page.get_by_role('button',name=re.compile(r'^Xem ảnh MIU15 · '))).to_have_count(2);page.get_by_role('button',name='Lên lệnh nhanh',exact=True).click()
  editor=page.get_by_role('dialog',name='Lập lệnh sản xuất',exact=True);expect(editor).to_be_visible();expect(editor.get_by_label('Loại hàng MIU15 Đen',exact=True)).to_have_value('In');expect(editor.get_by_label('MIU15 Đen M',exact=True)).to_have_value('60')
- editor.get_by_role('button',name='Xem ảnh MIU15',exact=True).first.click();viewer=page.get_by_role('dialog',name='Ảnh sản phẩm MIU15',exact=True);expect(viewer).to_be_visible();page.keyboard.press('Escape');expect(viewer).not_to_be_visible();expect(editor).to_be_visible();expect(editor.get_by_label('MIU15 Đen M',exact=True)).to_have_value('60')
+ editor.get_by_role('button',name='Xem ảnh MIU15 · Đen',exact=True).first.click();viewer=page.get_by_role('dialog',name='Ảnh sản phẩm MIU15 · Đen',exact=True);expect(viewer).to_be_visible();page.keyboard.press('Escape');expect(viewer).not_to_be_visible();expect(editor).to_be_visible();expect(editor.get_by_label('MIU15 Đen M',exact=True)).to_have_value('60')
  editor.get_by_label('Loại hàng MIU15 Đen',exact=True).select_option('Trơn');editor.get_by_label('Nhà xưởng',exact=True).fill('PRIMITEX');page.screenshot(path='/tmp/comsflow-product-order-editor.png',full_page=True)
  editor.get_by_role('button',name='Lưu lệnh vào lịch sử',exact=True).click();expect(editor).not_to_be_visible()
  orders=page.request.get('http://localhost:5175/api/orders').json();assert len(orders)==1 and orders[0]['items'][0]['goodsType']=='Trơn';oid=orders[0]['id'];code=orders[0]['code']

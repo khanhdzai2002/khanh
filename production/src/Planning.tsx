@@ -339,6 +339,7 @@ export function Planning({
                         <ProductPhoto
                           products={data.products || []}
                           sku={s.sku}
+                          color={s.color}
                         />
                       </td>
                       <td className="product-code">

@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { Search, ImagePlus, Pencil } from "lucide-react";
 import { goodsTypes, type GoodsType } from "../shared/domain";
-import { type ProductProfile } from "../shared/product-profiles";
+import {
+  type ProductProfile,
+  type ProductColorProfile,
+} from "../shared/product-profiles";
 import { normalizeLabel } from "../shared/incoming-goods";
 import { send } from "./api";
 import { Empty, Modal, Field, Notice, type Run } from "./ui";
@@ -71,12 +74,23 @@ export function ProductProfiles({
   const [search, setSearch] = useState(""),
     [type, setType] = useState(""),
     [missing, setMissing] = useState(false),
-    [editing, setEditing] = useState<ProductProfile | null>(null);
+    [missingColor, setMissingColor] = useState(false),
+    [editing, setEditing] = useState<{
+      product: ProductProfile;
+      color?: ProductColorProfile;
+    } | null>(null);
   const rows = products.filter(
     (p) =>
-      normalizeLabel(p.sku + " " + p.name).includes(normalizeLabel(search)) &&
+      normalizeLabel(
+        p.sku +
+          " " +
+          p.name +
+          " " +
+          (p.colors || []).map((c) => c.color).join(" "),
+      ).includes(normalizeLabel(search)) &&
       (!type || (type === "missing" ? !p.goodsType : p.goodsType === type)) &&
-      (!missing || !p.imageUrl),
+      (!missing || !p.imageUrl) &&
+      (!missingColor || (p.colors || []).some((c) => !c.imageUrl)),
   );
   return (
     <>
@@ -85,7 +99,8 @@ export function ProductProfiles({
           <div className="eyebrow">DANH MỤC NHẬN DIỆN</div>
           <h1>Thiết lập sản phẩm</h1>
           <p>
-            Ảnh và loại hàng mặc định theo mã, dùng chung cho mọi màu và size.
+            Ảnh chung theo mã và ảnh riêng theo từng màu; mỗi ảnh màu dùng chung
+            cho các size.
           </p>
         </div>
       </div>
@@ -95,16 +110,26 @@ export function ProductProfiles({
           <strong>{products.length}</strong>
         </div>
         <div>
-          <small>Đã có ảnh</small>
+          <small>Mã có ảnh chung</small>
           <strong>{products.filter((p) => p.imageUrl).length}</strong>
         </div>
         <div>
-          <small>Chưa có ảnh</small>
-          <strong>{products.filter((p) => !p.imageUrl).length}</strong>
+          <small>Màu có ảnh riêng</small>
+          <strong>
+            {
+              products.flatMap((p) => p.colors || []).filter((c) => c.imageUrl)
+                .length
+            }
+          </strong>
         </div>
         <div>
-          <small>Chưa chọn loại hàng</small>
-          <strong>{products.filter((p) => !p.goodsType).length}</strong>
+          <small>Màu chưa có ảnh riêng</small>
+          <strong>
+            {
+              products.flatMap((p) => p.colors || []).filter((c) => !c.imageUrl)
+                .length
+            }
+          </strong>
         </div>
       </div>
       {!writable && (
@@ -119,7 +144,7 @@ export function ProductProfiles({
             <Search size={17} />
             <input
               aria-label="Tìm mã thiết lập sản phẩm"
-              placeholder="Tìm mã, tên sản phẩm…"
+              placeholder="Tìm mã, tên sản phẩm, màu…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -141,35 +166,117 @@ export function ProductProfiles({
               checked={missing}
               onChange={(e) => setMissing(e.target.checked)}
             />{" "}
-            Chưa có ảnh
+            Chưa có ảnh chung
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={missingColor}
+              onChange={(e) => setMissingColor(e.target.checked)}
+            />{" "}
+            Có màu chưa có ảnh riêng
           </label>
         </div>
         {rows.length ? (
           <div className="product-profile-grid">
             {rows.map((p) => (
               <article key={p.id} className="product-profile-card">
-                <ProductPhoto products={products} sku={p.sku} />
-                <div>
-                  <h3>{p.sku}</h3>
-                  <p>{p.name || "Chưa có tên mô tả"}</p>
-                  <span
-                    className={
-                      "badge " + (p.goodsType === "In" ? "orange" : "")
-                    }
-                  >
-                    {p.goodsType || "Chưa thiết lập loại"}
-                  </span>
+                <div className="product-profile-main">
+                  <ProductPhoto products={products} sku={p.sku} />
+                  <div>
+                    <h3>{p.sku}</h3>
+                    <p>{p.name || "Chưa có tên mô tả"}</p>
+                    <span
+                      className={
+                        "badge " + (p.goodsType === "In" ? "orange" : "")
+                      }
+                    >
+                      {p.goodsType || "Chưa thiết lập loại"}
+                    </span>
+                  </div>
+                  {writable && (
+                    <button
+                      disabled={busy}
+                      aria-label={"Thiết lập " + p.sku}
+                      onClick={() => setEditing({ product: p })}
+                    >
+                      <Pencil size={15} />
+                      Ảnh chung / loại
+                    </button>
+                  )}
                 </div>
-                {writable && (
-                  <button
-                    disabled={busy}
-                    aria-label={"Thiết lập " + p.sku}
-                    onClick={() => setEditing(p)}
-                  >
-                    <Pencil size={15} />
-                    Thiết lập
-                  </button>
-                )}
+                <details
+                  className="product-color-photos"
+                  open={
+                    missingColor ||
+                    (!!search &&
+                      !normalizeLabel(p.sku + " " + p.name).includes(
+                        normalizeLabel(search),
+                      ))
+                      ? true
+                      : undefined
+                  }
+                >
+                  <summary>
+                    Ảnh theo màu (
+                    {(p.colors || []).filter((c) => c.imageUrl).length}/
+                    {(p.colors || []).length} đã có ảnh riêng)
+                  </summary>
+                  {(p.colors || []).length ? (
+                    <div className="product-color-grid">
+                      {(p.colors || [])
+                        .filter(
+                          (c) =>
+                            (!missingColor || !c.imageUrl) &&
+                            (!search ||
+                              normalizeLabel(p.sku + " " + p.name).includes(
+                                normalizeLabel(search),
+                              ) ||
+                              normalizeLabel(c.color).includes(
+                                normalizeLabel(search),
+                              )),
+                        )
+                        .map((c) => (
+                          <div className="product-color-card" key={c.key}>
+                            <ProductPhoto
+                              products={products}
+                              sku={p.sku}
+                              color={c.color}
+                            />
+                            <div>
+                              <strong>{c.color}</strong>
+                              <small>
+                                {c.imageUrl
+                                  ? "Đã có ảnh riêng"
+                                  : p.imageUrl
+                                    ? "Chưa có ảnh riêng · đang dùng ảnh chung"
+                                    : "Chưa có ảnh"}
+                              </small>
+                            </div>
+                            {writable && (
+                              <button
+                                disabled={busy}
+                                aria-label={
+                                  "Thiết lập ảnh " + p.sku + " · " + c.color
+                                }
+                                onClick={() =>
+                                  setEditing({ product: p, color: c })
+                                }
+                              >
+                                <ImagePlus size={15} />
+                                Ảnh màu
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <p>
+                      Chưa có màu trong danh mục. Thêm SKU hoặc lưu lệnh mới để
+                      thiết lập ảnh màu.
+                    </p>
+                  )}
+                </details>
               </article>
             ))}
           </div>
@@ -183,8 +290,9 @@ export function ProductProfiles({
       </section>
       {editing && (
         <ProfileEditor
-          key={editing.id}
-          product={editing}
+          key={editing.product.id + ":" + (editing.color?.key || "common")}
+          product={editing.product}
+          color={editing.color}
           busy={busy}
           run={run}
           onClose={() => setEditing(null)}
@@ -195,11 +303,13 @@ export function ProductProfiles({
 }
 function ProfileEditor({
   product,
+  color,
   busy,
   run,
   onClose,
 }: {
   product: ProductProfile;
+  color?: ProductColorProfile;
   busy: boolean;
   run: Run;
   onClose: () => void;
@@ -213,9 +323,14 @@ function ProfileEditor({
     [removeImage, setRemove] = useState(false),
     [uploading, setUploading] = useState(false),
     [error, setError] = useState("");
-  const src = image?.uri || (!removeImage ? product.imageUrl : null);
+  const current = color || product,
+    label = product.sku + (color ? " · " + color.color : "");
+  const src =
+    image?.uri ||
+    (!removeImage ? current.imageUrl : null) ||
+    (color ? product.imageUrl : null);
   return (
-    <Modal title={"Thiết lập " + product.sku} onClose={onClose}>
+    <Modal title={"Thiết lập " + label} onClose={onClose}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -223,10 +338,12 @@ function ProfileEditor({
           void run(
             () =>
               send(
-                "/api/product-profiles/" + product.id,
+                "/api/product-profiles/" +
+                  product.id +
+                  (color ? "/colors" : ""),
                 {
-                  expectedVersion: product.version,
-                  goodsType,
+                  expectedVersion: current.version,
+                  ...(color ? { color: color.color } : { goodsType }),
                   ...(image
                     ? { image: { name: image.name, data: image.data } }
                     : {}),
@@ -234,7 +351,9 @@ function ProfileEditor({
                 },
                 "PUT",
               ),
-            "Đã lưu ảnh và loại hàng " + product.sku,
+            color
+              ? "Đã lưu ảnh màu " + label
+              : "Đã lưu ảnh và loại hàng " + product.sku,
           ).then((ok) => {
             if (ok) onClose();
           });
@@ -242,7 +361,7 @@ function ProfileEditor({
       >
         <div className="product-profile-preview">
           {src ? (
-            <img src={src} alt={"Ảnh xem trước " + product.sku} />
+            <img src={src} alt={"Ảnh xem trước " + label} />
           ) : (
             <>
               <ImagePlus size={36} />
@@ -250,7 +369,14 @@ function ProfileEditor({
             </>
           )}
         </div>
-        <Field label={"Chọn ảnh cho " + product.sku}>
+        {color && !image && (removeImage || !color.imageUrl) && (
+          <Notice>
+            {product.imageUrl
+              ? "Màu này đang dùng ảnh chung của mã. Tải ảnh để thiết lập ảnh riêng cho đúng màu."
+              : "Màu này chưa có ảnh riêng. Chọn ảnh đúng phân loại màu bên dưới."}
+          </Notice>
+        )}
+        <Field label={"Chọn ảnh cho " + label}>
           <input
             type="file"
             accept="image/jpeg,image/png,image/webp"
@@ -275,7 +401,7 @@ function ProfileEditor({
           dụng.
         </small>
         {uploading && <p role="status">Đang tối ưu ảnh…</p>}
-        {src && (
+        {(image || (!removeImage && current.imageUrl)) && (
           <button
             type="button"
             disabled={busy || uploading}
@@ -284,10 +410,10 @@ function ProfileEditor({
               setRemove(true);
             }}
           >
-            Gỡ ảnh
+            {color ? "Gỡ ảnh riêng" : "Gỡ ảnh"}
           </button>
         )}
-        {removeImage && product.imageUrl && (
+        {removeImage && current.imageUrl && (
           <button
             type="button"
             disabled={busy || uploading}
@@ -296,24 +422,26 @@ function ProfileEditor({
             Giữ ảnh đang lưu
           </button>
         )}
-        <Field label={"Loại hàng mặc định " + product.sku}>
-          <select
-            disabled={busy}
-            value={goodsType || ""}
-            onChange={(e) =>
-              setType((e.target.value || null) as GoodsType | null)
-            }
-          >
-            <option value="">Chưa thiết lập</option>
-            {goodsTypes.map((t) => (
-              <option key={t}>{t}</option>
-            ))}
-          </select>
-        </Field>
+        {!color && (
+          <Field label={"Loại hàng mặc định " + product.sku}>
+            <select
+              disabled={busy}
+              value={goodsType || ""}
+              onChange={(e) =>
+                setType((e.target.value || null) as GoodsType | null)
+              }
+            >
+              <option value="">Chưa thiết lập</option>
+              {goodsTypes.map((t) => (
+                <option key={t}>{t}</option>
+              ))}
+            </select>
+          </Field>
+        )}
         <p>
-          Loại mặc định được gợi ý khi thêm sản phẩm vào lệnh mới. Loại hàng đã
-          lưu trong lệnh cũ giữ nguyên; ảnh nhận diện hiển thị theo thiết lập
-          hiện tại.
+          {color
+            ? "Ảnh riêng dùng cho đúng mã và màu này ở mọi size. Gỡ ảnh riêng sẽ dùng lại ảnh chung của mã, nếu có."
+            : "Loại mặc định được gợi ý khi thêm sản phẩm vào lệnh mới. Loại hàng đã lưu trong lệnh cũ giữ nguyên; ảnh chung được dùng cho màu chưa có ảnh riêng."}
         </p>
         {error && (
           <div className="form-error" role="alert">
@@ -325,7 +453,7 @@ function ProfileEditor({
             Đóng, không lưu
           </button>
           <button className="primary" disabled={busy || uploading}>
-            Lưu thiết lập sản phẩm
+            {color ? "Lưu ảnh màu" : "Lưu thiết lập sản phẩm"}
           </button>
         </div>
       </form>

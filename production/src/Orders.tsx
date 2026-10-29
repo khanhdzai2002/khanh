@@ -993,7 +993,11 @@ function OrderEditor({
               {[...groups.entries()].map(([key, g]) => (
                 <tr key={key}>
                   <td>
-                    <ProductPhoto products={data.products || []} sku={g.sku} />
+                    <ProductPhoto
+                      products={data.products || []}
+                      sku={g.sku}
+                      color={g.color}
+                    />
                   </td>
                   <td className="product-code">{g.sku}</td>
                   <td>
@@ -1202,6 +1206,15 @@ function OrderEditor({
                   <ProductPhoto
                     products={data.products || []}
                     sku={manual ? newCode.trim() : code}
+                    color={
+                      manual
+                        ? newColors.trim().includes("\n")
+                          ? undefined
+                          : newColors.trim() || undefined
+                        : colors.length === 1
+                          ? colors[0]
+                          : undefined
+                    }
                   />
                   <span>
                     {manual ? newCode.trim().toUpperCase() : code}
@@ -1531,7 +1544,11 @@ function OrderDetail({
               {order.items.map((i) => (
                 <tr key={i.id}>
                   <td>
-                    <ProductPhoto products={products} sku={i.sku} />
+                    <ProductPhoto
+                      products={products}
+                      sku={i.sku}
+                      color={i.color}
+                    />
                   </td>
                   <td className="product-code">{i.sku}</td>
                   <td>
