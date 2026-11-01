@@ -37,6 +37,7 @@ import { SettingsPage } from "./Settings";
 import { IncomingGoods } from "./IncomingGoods";
 import { AccountsPage } from "./Accounts";
 import { ProductProfiles } from "./ProductProfiles";
+import { AutomaticIncoming } from "./AutomaticIncoming";
 import type { ProductProfile } from "../shared/product-profiles";
 export type Snapshot = {
   skus: Variant[];
@@ -50,6 +51,7 @@ const pages = [
   { id: "planning", name: "Dự kiến sản xuất", icon: ClipboardList },
   { id: "orders", name: "Gối lệnh sản xuất", icon: Factory },
   { id: "incoming", name: "Nhập liệu hàng về", icon: PackageCheck },
+  { id: "incoming-json", name: "Nhập hàng tự động", icon: PackageCheck },
   { id: "history", name: "Lịch sử & giao nhận", icon: History },
   { id: "sales", name: "Phân tích bán hàng", icon: ChartNoAxesCombined },
   { id: "archived", name: "Lệnh đã xóa", icon: Trash2 },
@@ -421,6 +423,17 @@ export default function App() {
                 writable={planner}
                 busy={busy}
                 navigate={navigate}
+              />
+            )}
+            {page === "incoming-json" && (
+              <AutomaticIncoming
+                data={data}
+                role={user.role}
+                run={run}
+                onOrder={(id) => {
+                  setOpenOrderId(id);
+                  navigate("history");
+                }}
               />
             )}
             {page === "accounts" && (

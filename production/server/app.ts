@@ -67,6 +67,7 @@ import { bulkOrderStatus } from "./bulk-order-status";
 import { salesFileSchema } from "../shared/sales-file";
 import { incomingRouter } from "./incoming-goods";
 import { productProfilesRouter } from "./product-profiles";
+import { incomingJsonRouter } from "./incoming-json";
 const PgStore = connectPg(session);
 export function makeApp() {
   const app = express(),
@@ -153,6 +154,7 @@ export function makeApp() {
     }),
   );
   app.use("/api/incoming", incomingRouter);
+  app.use("/api/incoming-json", incomingJsonRouter);
   app.use("/api/product-profiles", productProfilesRouter);
   app.get("/api/dashboard", async (_req, res) => res.json(await dashboard()));
   app.get("/api/account", async (req, res) => {

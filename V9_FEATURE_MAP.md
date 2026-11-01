@@ -146,3 +146,7 @@ Theo yêu cầu mới: mở nhập cả S/M/L/XL khi chưa có SKU/lệnh; lưu 
 Menu Thiết lập sản phẩm quản lý ảnh/loại mặc định dùng chung cho màu–size. Dự kiến, lập/chỉnh sửa và xem/in lệnh có ảnh thu nhỏ/phóng to; loại theo dòng lệnh được lưu riêng và xuất CSV/Excel. Không đổi số lượng/công thức hoặc tự gán loại cho chứng từ cũ. Xem [hướng dẫn ảnh sản phẩm](production/docs/PRODUCT_PROFILES.md). Migration012 lưu PostgreSQL, không cần dịch vụ ngoài.
 
 Ảnh màu (migration013): mỗi mã–màu có ảnh riêng dùng chung các size. Thiết lập sản phẩm có nhóm màu/tìm kiếm/lọc thiếu ảnh. Dự kiến, lập/sửa và xem/in lệnh chọn ảnh đúng mã + toàn bộ tên màu; thiếu ảnh riêng dùng ảnh chung có nhãn. Giữ nguyên ảnh chung cũ, loại hàng và lịch sử; không nhân bản ảnh ra mỗi size.
+
+## Nhập hàng từ JSON — module riêng
+
+Menu Nhập hàng tự động đọc `comsflow.production.import.v1`/WAREHOUSE_RECEIPT, xem trước/duyệt metadata và ánh xạ mã–màu–size rồi tạo nháp theo bao. Dùng lại FIFO/nhận dư/hàng chưa đối chiếu và xác nhận hiện có; không tự tạo lệnh đặt hoặc tăng tồn. Giữ module thủ công. Migration014 chỉ thêm registry nguồn bất biến, chống nhập trùng document_id và lưu quyết định ánh xạ; không chỉnh dữ liệu cũ. [Hướng dẫn JSON](production/docs/INCOMING_JSON.md).

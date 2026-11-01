@@ -33,11 +33,17 @@ export function IncomingGoods({
   role,
   run,
   onOrder,
+  initialDraftId,
+  jsonMode = false,
+  onBack,
 }: {
   data: Snapshot;
   role: Role;
   run: Run;
   onOrder: (id: string) => void;
+  initialDraftId?: string;
+  jsonMode?: boolean;
+  onBack?: () => void;
 }) {
   const [draft, setDraft] = useState<any>(null),
     [form, setForm] = useState<IncomingForm>({
@@ -183,6 +189,9 @@ export function IncomingGoods({
         "Đã tạo phiếu. Xem ảnh và chọn mã–màu–size để nhập số lượng thực về.",
       );
     });
+  useEffect(() => {
+    if (initialDraftId && writable) void act(() => load(initialDraftId));
+  }, [initialDraftId]);
   const validForm = () => {
     const f = incomingFormSchema.safeParse(form);
     if (!f.success)
@@ -336,12 +345,34 @@ export function IncomingGoods({
       <div className="page-heading">
         <div>
           <div className="eyebrow">TIẾP NHẬN THÀNH PHẨM</div>
-          <h1>Nhập liệu hàng về</h1>
+          <h1>
+            {jsonMode ? "Nhập hàng tự động từ JSON" : "Nhập liệu hàng về"}
+          </h1>
           <p>
-            Xem phiếu kiểm, nhập số lượng thực về và phân bổ vào các lệnh sản
-            xuất.
+            {jsonMode
+              ? "Dữ liệu JSON đã chuyển thành bảng theo bao, mã–màu và S/M/L/XL. Đối soát lệnh rồi xác nhận để ghi hàng."
+              : "Xem phiếu kiểm, nhập số lượng thực về và phân bổ vào các lệnh sản xuất."}
           </p>
         </div>
+        {onBack && (
+          <button
+            disabled={busy}
+            onClick={() =>
+              void act(async () => {
+                if (dirty && draft?.state === "draft") {
+                  await send(
+                    `/api/incoming/${draft.id}`,
+                    { expectedVersion: draft.version, form: validForm() },
+                    "PUT",
+                  );
+                }
+                onBack();
+              })
+            }
+          >
+            Quay lại nhập JSON
+          </button>
+        )}
       </div>
       {error && (
         <div className="form-error" role="alert">
@@ -354,35 +385,64 @@ export function IncomingGoods({
         </div>
       )}
       <ReceivingDashboard revision={data.orders} onOrder={viewOrder} />
-      <section className="incoming-panel">
-        <h2>1. Ảnh phiếu kiểm</h2>
-        <Field label="Ảnh phiếu kiểm kho">
-          <input
-            type="file"
-            multiple
-            accept="image/jpeg,image/png,image/webp"
-            disabled={busy}
-            onChange={(e) => setFiles(Array.from(e.target.files || []))}
-          />
-        </Field>
-        <p>
-          Tối đa 4 ảnh / 8 MB. Ảnh được giữ để đối chiếu cùng bảng nhập tay.
-        </p>
-        <div className="actions">
-          <button
-            className="primary"
-            disabled={busy || !files.length}
-            onClick={() => void create(true)}
-          >
-            Tạo phiếu từ ảnh{files.length ? ` (${files.length})` : ""}
-          </button>
-          <button disabled={busy} onClick={() => void create(false)}>
-            Nhập bảng không kèm ảnh
-          </button>
-        </div>
-      </section>
+      {!jsonMode && (
+        <section className="incoming-panel">
+          <h2>1. Ảnh phiếu kiểm</h2>
+          <Field label="Ảnh phiếu kiểm kho">
+            <input
+              type="file"
+              multiple
+              accept="image/jpeg,image/png,image/webp"
+              disabled={busy}
+              onChange={(e) => setFiles(Array.from(e.target.files || []))}
+            />
+          </Field>
+          <p>
+            Tối đa 4 ảnh / 8 MB. Ảnh được giữ để đối chiếu cùng bảng nhập tay.
+          </p>
+          <div className="actions">
+            <button
+              className="primary"
+              disabled={busy || !files.length}
+              onClick={() => void create(true)}
+            >
+              Tạo phiếu từ ảnh{files.length ? ` (${files.length})` : ""}
+            </button>
+            <button disabled={busy} onClick={() => void create(false)}>
+              Nhập bảng không kèm ảnh
+            </button>
+          </div>
+        </section>
+      )}
       {draft && (
         <section className="incoming-panel">
+          {draft.jsonSource && (
+            <div className="json-source-summary">
+              <h3>Chứng từ JSON: {draft.jsonSource.document_id}</h3>
+              <a
+                className="button"
+                href={`/api/incoming-json/${draft.id}/source`}
+              >
+                Tải JSON nguồn
+              </a>
+              <p>
+                Ngày nguồn: {draft.jsonSource.document.receipt_date} · Xưởng
+                trên JSON: {draft.jsonSource.document.supplier} · Kiểm hàng:{" "}
+                {draft.jsonSource.document.checker || "Chưa ghi"}
+              </p>
+              <p>
+                Tổng nguồn: {fmt(Number(draft.jsonSource.original_total))} sản
+                phẩm · Chứng từ được lưu để chống nhập trùng.
+              </p>
+              {total !== Number(draft.jsonSource.original_total) && (
+                <Notice>
+                  Tổng bảng hiện tại {fmt(total)} khác tổng nguồn{" "}
+                  {fmt(Number(draft.jsonSource.original_total))}. Kiểm tra chỉnh
+                  sửa trước khi ghi hàng; JSON nguồn vẫn được giữ.
+                </Notice>
+              )}
+            </div>
+          )}
           <h2>2. Nhập hàng và chọn cách cộng vào lệnh</h2>
           <p>
             Phiếu {draft.id.slice(0, 8)} ·{" "}
@@ -760,7 +820,9 @@ export function IncomingGoods({
                       }
                       onChange={(e) => setChecked(e.target.checked)}
                     />{" "}
-                    Tôi đã kiểm tra ảnh, số lượng và phân bổ vào từng lệnh.
+                    {draft.jsonSource
+                      ? "Tôi đã kiểm tra JSON, số lượng và phân bổ vào từng lệnh."
+                      : "Tôi đã kiểm tra ảnh, số lượng và phân bổ vào từng lệnh."}
                   </label>
                   <div className="actions">
                     <button
@@ -820,58 +882,60 @@ export function IncomingGoods({
           </div>
         </section>
       )}
-      <section className="incoming-panel">
-        <h2>Phiếu của tôi — 100 phiếu gần nhất</h2>
-        <button disabled={busy} onClick={() => void act(reload)}>
-          Tải lại danh sách phiếu
-        </button>
-        <p>
-          Lưu nháp trước khi rời trang. Ảnh đã xác nhận không nhập lại thành
-          phiếu mới.
-        </p>
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Phiếu</th>
-                <th>Thời gian</th>
-                <th>Trạng thái</th>
-                <th>Sản lượng</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.map((h) => (
-                <tr key={h.id}>
-                  <td>{h.id.slice(0, 8)}</td>
-                  <td>{vnDate(h.created_at)}</td>
-                  <td>{h.state === "confirmed" ? "Đã ghi nhận" : "Nháp"}</td>
-                  <td>{h.result ? fmt(h.result.received) : "Chưa ghi"}</td>
-                  <td>
-                    <button
-                      disabled={busy}
-                      onClick={() =>
-                        void act(async () => {
-                          if (
-                            dirty &&
-                            !window.confirm(
-                              "Bỏ thay đổi chưa lưu để mở phiếu khác?",
-                            )
-                          )
-                            return;
-                          await load(h.id);
-                        })
-                      }
-                    >
-                      Mở phiếu
-                    </button>
-                  </td>
+      {!jsonMode && (
+        <section className="incoming-panel">
+          <h2>Phiếu của tôi — 100 phiếu gần nhất</h2>
+          <button disabled={busy} onClick={() => void act(reload)}>
+            Tải lại danh sách phiếu
+          </button>
+          <p>
+            Lưu nháp trước khi rời trang. Ảnh đã xác nhận không nhập lại thành
+            phiếu mới.
+          </p>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Phiếu</th>
+                  <th>Thời gian</th>
+                  <th>Trạng thái</th>
+                  <th>Sản lượng</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+              </thead>
+              <tbody>
+                {history.map((h) => (
+                  <tr key={h.id}>
+                    <td>{h.id.slice(0, 8)}</td>
+                    <td>{vnDate(h.created_at)}</td>
+                    <td>{h.state === "confirmed" ? "Đã ghi nhận" : "Nháp"}</td>
+                    <td>{h.result ? fmt(h.result.received) : "Chưa ghi"}</td>
+                    <td>
+                      <button
+                        disabled={busy}
+                        onClick={() =>
+                          void act(async () => {
+                            if (
+                              dirty &&
+                              !window.confirm(
+                                "Bỏ thay đổi chưa lưu để mở phiếu khác?",
+                              )
+                            )
+                              return;
+                            await load(h.id);
+                          })
+                        }
+                      >
+                        Mở phiếu
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
       {busy && (
         <div className="working" role="status">
           Đang xử lý phiếu…

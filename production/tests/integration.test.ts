@@ -150,7 +150,7 @@ describe("PostgreSQL — giao dịch lệnh và biên nhận", () => {
         (await pool.query("SELECT count(*) AS n FROM schema_migrations"))
           .rows[0].n,
       ),
-    ).toBe(13);
+    ).toBe(14);
   });
   it("tạo lệnh nhiều màu nhiều size, không tự chuyển Nháp thành đã gửi", async () => {
     const ids: string[] = [];

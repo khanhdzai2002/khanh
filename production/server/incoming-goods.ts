@@ -601,7 +601,14 @@ incomingRouter.get("/:id", async (req, res) => {
       [id],
     )
   ).rows;
-  res.json({ ...d, images });
+  const jsonSource =
+    (
+      await pool.query(
+        "SELECT document_id,original_total,source->'document' AS document,source->'notes' AS notes,created_at FROM incoming_json_sources WHERE draft_id=$1",
+        [id],
+      )
+    ).rows[0] || null;
+  res.json({ ...d, images, jsonSource });
 });
 incomingRouter.get("/:id/images/:imageId", async (req, res) => {
   const id = z.uuid().parse(req.params.id);
