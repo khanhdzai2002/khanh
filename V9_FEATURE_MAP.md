@@ -150,3 +150,5 @@ Menu Thiết lập sản phẩm quản lý ảnh/loại mặc định dùng chun
 ## Nhập hàng từ JSON — module riêng
 
 Menu Nhập hàng tự động đọc `comsflow.production.import.v1`/WAREHOUSE_RECEIPT, xem trước/duyệt metadata và ánh xạ mã–màu–size rồi tạo nháp theo bao. Dùng lại FIFO/nhận dư/hàng chưa đối chiếu và xác nhận hiện có; không tự tạo lệnh đặt hoặc tăng tồn. Giữ module thủ công. Migration014 chỉ thêm registry nguồn bất biến, chống nhập trùng document_id và lưu quyết định ánh xạ; không chỉnh dữ liệu cũ. [Hướng dẫn JSON](production/docs/INCOMING_JSON.md).
+
+JSON bổ sung nhãn/nền dòng xanh–đỏ–cam–tím theo lựa chọn và kiểm tra hiện tại, kèm bộ lọc đếm/tìm không dấu. Kiểm tra gợi ý chỉ áp dụng dòng đang hiển thị. Thiết lập sản phẩm thêm trực tiếp sản phẩm/màu/SKU S/M/L/XL, nhãn size con và thêm size thiếu; API append chỉ tạo SKU thiếu, không reset dữ liệu hoặc ảnh/chứng từ cũ. Không cần migration mới.

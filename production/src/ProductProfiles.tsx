@@ -1,14 +1,22 @@
 import { useState } from "react";
-import { Search, ImagePlus, Pencil } from "lucide-react";
-import { goodsTypes, type GoodsType } from "../shared/domain";
+import { Search, ImagePlus, Pencil, Plus } from "lucide-react";
+import {
+  goodsTypes,
+  sizes,
+  type GoodsType,
+  type Variant,
+} from "../shared/domain";
 import {
   type ProductProfile,
   type ProductColorProfile,
+  productColorKey,
 } from "../shared/product-profiles";
 import { normalizeLabel } from "../shared/incoming-goods";
 import { send } from "./api";
 import { Empty, Modal, Field, Notice, type Run } from "./ui";
 import { ProductPhoto } from "./ProductPhoto";
+import { ProductCatalogEditor } from "./ProductCatalogEditor";
+import type { ProductCatalogResult } from "../shared/product-catalog";
 async function prepareImage(file: File) {
   if (!["image/jpeg", "image/png", "image/webp"].includes(file.type))
     throw Error(
@@ -62,11 +70,13 @@ async function prepareImage(file: File) {
 }
 export function ProductProfiles({
   products,
+  skus,
   writable,
   busy,
   run,
 }: {
   products: ProductProfile[];
+  skus: Variant[];
   writable: boolean;
   busy: boolean;
   run: Run;
@@ -79,6 +89,27 @@ export function ProductProfiles({
       product: ProductProfile;
       color?: ProductColorProfile;
     } | null>(null);
+  const [adding, setAdding] = useState<{
+      product?: ProductProfile;
+      initialColor?: string;
+    } | null>(null),
+    [added, setAdded] = useState<ProductCatalogResult | null>(null),
+    [expanded, setExpanded] = useState<string[]>([]);
+  const productSkus = (p: ProductProfile, color?: string) =>
+    skus.filter(
+      (s) =>
+        s.sku === p.sku &&
+        (!color || productColorKey(s.color) === productColorKey(color)),
+    );
+  const saved = (r: ProductCatalogResult) => {
+    setAdding(null);
+    setAdded(r);
+    setSearch(r.sku);
+    setType("");
+    setMissing(false);
+    setMissingColor(false);
+    setExpanded((c) => [...new Set([...c, r.sku])]);
+  };
   const rows = products.filter(
     (p) =>
       normalizeLabel(
@@ -103,7 +134,23 @@ export function ProductProfiles({
             cho các size.
           </p>
         </div>
+        {writable && (
+          <button
+            className="primary"
+            disabled={busy}
+            onClick={() => setAdding({})}
+          >
+            <Plus size={17} />
+            Thêm sản phẩm
+          </button>
+        )}
       </div>
+      {added && (
+        <Notice>
+          Đã tạo {added.created} SKU mới cho {added.sku}; giữ nguyên{" "}
+          {added.skipped} SKU đã có.
+        </Notice>
+      )}
       <div className="mini-kpis">
         <div>
           <small>Mã sản phẩm</small>
@@ -186,6 +233,10 @@ export function ProductProfiles({
                   <div>
                     <h3>{p.sku}</h3>
                     <p>{p.name || "Chưa có tên mô tả"}</p>
+                    <small>
+                      {productSkus(p).length} SKU · {(p.colors || []).length}{" "}
+                      màu
+                    </small>
                     <span
                       className={
                         "badge " + (p.goodsType === "In" ? "orange" : "")
@@ -195,19 +246,30 @@ export function ProductProfiles({
                     </span>
                   </div>
                   {writable && (
-                    <button
-                      disabled={busy}
-                      aria-label={"Thiết lập " + p.sku}
-                      onClick={() => setEditing({ product: p })}
-                    >
-                      <Pencil size={15} />
-                      Ảnh chung / loại
-                    </button>
+                    <div className="product-profile-actions">
+                      <button
+                        disabled={busy}
+                        aria-label={"Thiết lập " + p.sku}
+                        onClick={() => setEditing({ product: p })}
+                      >
+                        <Pencil size={15} />
+                        Ảnh chung / loại
+                      </button>
+                      <button
+                        disabled={busy}
+                        aria-label={"Thêm SKU con " + p.sku}
+                        onClick={() => setAdding({ product: p })}
+                      >
+                        <Plus size={15} />
+                        Thêm SKU con
+                      </button>
+                    </div>
                   )}
                 </div>
                 <details
                   className="product-color-photos"
                   open={
+                    expanded.includes(p.sku) ||
                     missingColor ||
                     (!!search &&
                       !normalizeLabel(p.sku + " " + p.name).includes(
@@ -216,9 +278,21 @@ export function ProductProfiles({
                       ? true
                       : undefined
                   }
+                  onToggle={(e) => {
+                    const open = e.currentTarget.open;
+                    setExpanded((old) =>
+                      open
+                        ? old.includes(p.sku)
+                          ? old
+                          : [...old, p.sku]
+                        : old.includes(p.sku)
+                          ? old.filter((s) => s !== p.sku)
+                          : old,
+                    );
+                  }}
                 >
                   <summary>
-                    Ảnh theo màu (
+                    Ảnh theo màu · SKU con (
                     {(p.colors || []).filter((c) => c.imageUrl).length}/
                     {(p.colors || []).length} đã có ảnh riêng)
                   </summary>
@@ -252,28 +326,82 @@ export function ProductProfiles({
                                     ? "Chưa có ảnh riêng · đang dùng ảnh chung"
                                     : "Chưa có ảnh"}
                               </small>
+                              <div className="product-sku-sizes">
+                                {sizes
+                                  .filter((size) =>
+                                    productSkus(p, c.color).some(
+                                      (s) => s.size === size,
+                                    ),
+                                  )
+                                  .map((size) => (
+                                    <span
+                                      key={size}
+                                      className="size-badge"
+                                      title={
+                                        "SKU " +
+                                        p.sku +
+                                        " · " +
+                                        c.color +
+                                        " · " +
+                                        size
+                                      }
+                                    >
+                                      {size}
+                                    </span>
+                                  ))}
+                                {!productSkus(p, c.color).length && (
+                                  <small>Chưa có SKU S/M/L/XL</small>
+                                )}
+                              </div>
                             </div>
                             {writable && (
-                              <button
-                                disabled={busy}
-                                aria-label={
-                                  "Thiết lập ảnh " + p.sku + " · " + c.color
-                                }
-                                onClick={() =>
-                                  setEditing({ product: p, color: c })
-                                }
-                              >
-                                <ImagePlus size={15} />
-                                Ảnh màu
-                              </button>
+                              <div className="product-color-actions">
+                                <button
+                                  disabled={busy}
+                                  aria-label={
+                                    "Thiết lập ảnh " + p.sku + " · " + c.color
+                                  }
+                                  onClick={() =>
+                                    setEditing({ product: p, color: c })
+                                  }
+                                >
+                                  <ImagePlus size={15} />
+                                  Ảnh màu
+                                </button>
+                                <button
+                                  disabled={
+                                    busy ||
+                                    productSkus(p, c.color).length >=
+                                      sizes.length
+                                  }
+                                  aria-label={
+                                    "Thêm size " + p.sku + " · " + c.color
+                                  }
+                                  title={
+                                    productSkus(p, c.color).length >=
+                                    sizes.length
+                                      ? "Đã đủ S/M/L/XL"
+                                      : "Bổ sung size còn thiếu"
+                                  }
+                                  onClick={() =>
+                                    setAdding({
+                                      product: p,
+                                      initialColor: c.color,
+                                    })
+                                  }
+                                >
+                                  <Plus size={15} />
+                                  Thêm size
+                                </button>
+                              </div>
                             )}
                           </div>
                         ))}
                     </div>
                   ) : (
                     <p>
-                      Chưa có màu trong danh mục. Thêm SKU hoặc lưu lệnh mới để
-                      thiết lập ảnh màu.
+                      Chưa có màu trong danh mục. Bấm Thêm SKU con để thêm màu
+                      và size.
                     </p>
                   )}
                 </details>
@@ -284,7 +412,7 @@ export function ProductProfiles({
           <Empty>
             {products.length
               ? "Không có mã phù hợp bộ lọc."
-              : "Chưa có mã sản phẩm. Thêm SKU tại Dự kiến sản xuất hoặc lưu lệnh có mã mới trước."}
+              : "Chưa có mã sản phẩm. Bấm Thêm sản phẩm để tạo mã, màu và size."}
           </Empty>
         )}
       </section>
@@ -296,6 +424,17 @@ export function ProductProfiles({
           busy={busy}
           run={run}
           onClose={() => setEditing(null)}
+        />
+      )}
+      {adding && (
+        <ProductCatalogEditor
+          product={adding.product}
+          initialColor={adding.initialColor}
+          skus={skus}
+          busy={busy}
+          run={run}
+          onClose={() => setAdding(null)}
+          onSaved={saved}
         />
       )}
     </>

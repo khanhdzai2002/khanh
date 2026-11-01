@@ -205,3 +205,66 @@ export function jsonMappingNeedsReview(
     ["Khớp danh mục", "Quy ước đã lưu"].includes(suggestion.matchSource);
   return suggestion.needsReview || mapping.keepUnmatched || !exact;
 }
+export function jsonMappingVisualState(
+  suggestion: ReturnType<typeof jsonSuggestions>[number],
+  mapping: z.infer<typeof jsonCreateSchema>["mappings"][number],
+  variants: JsonVariant[],
+) {
+  if (mapping.keepUnmatched)
+    return {
+      kind: "unmatched",
+      tone: mapping.reviewed ? "purple" : "amber",
+      label: "Chưa đối chiếu lệnh",
+      detail: mapping.reviewed
+        ? "Đã xác nhận giữ nguyên mã/màu nguồn"
+        : "Cần xác nhận đã kiểm tra dòng",
+      pendingReview: !mapping.reviewed,
+      needsAction: !mapping.reviewed,
+    };
+  const knownSku = variants.some(
+    (v) => v.sku.toUpperCase() === mapping.sku.toUpperCase(),
+  );
+  const knownColor = variants.some(
+    (v) =>
+      v.sku.toUpperCase() === mapping.sku.toUpperCase() &&
+      v.color.trim().toLowerCase() === mapping.color.trim().toLowerCase(),
+  );
+  if (!knownSku || !mapping.color || !knownColor)
+    return {
+      kind: "missing",
+      tone: "red",
+      label: !knownSku ? "Cần chọn mã / màu" : "Cần chọn màu",
+      detail: "Chọn danh mục hoặc giữ nguyên chưa đối chiếu",
+      pendingReview: false,
+      needsAction: true,
+    };
+  const needs = jsonMappingNeedsReview(suggestion, mapping);
+  if (needs && !mapping.reviewed) {
+    const unchanged =
+      mapping.sku.toUpperCase() === suggestion.suggestedSku.toUpperCase() &&
+      mapping.color === suggestion.suggestedColor;
+    return {
+      kind: "review",
+      tone: "amber",
+      label:
+        unchanged && suggestion.matchSource.startsWith("Gợi ý")
+          ? suggestion.matchSource
+          : unchanged && suggestion.needsReview
+            ? "Khớp màu · nguồn cần kiểm tra"
+            : "Đã chọn lại · cần kiểm tra",
+      detail: "Xác nhận dòng sau khi kiểm tra mã, màu và số lượng",
+      pendingReview: true,
+      needsAction: true,
+    };
+  }
+  return {
+    kind: "ready",
+    tone: "green",
+    label: needs ? "Đã kiểm tra ánh xạ" : suggestion.matchSource,
+    detail: needs
+      ? "Đã xác nhận mã và màu đang chọn"
+      : "Mã và màu khớp danh mục",
+    pendingReview: false,
+    needsAction: false,
+  };
+}

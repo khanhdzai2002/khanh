@@ -447,6 +447,7 @@ export default function App() {
             {page === "products" && (
               <ProductProfiles
                 products={data.products || []}
+                skus={data.skus}
                 writable={planner}
                 busy={busy}
                 run={run}

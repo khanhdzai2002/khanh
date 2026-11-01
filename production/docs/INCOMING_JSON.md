@@ -7,12 +7,21 @@ Menu mới **Nhập hàng tự động** nhận JSON đã xử lý bên ngoài a
 1. Dán JSON hoặc chọn file `.json`/`.txt`, bấm **Đọc JSON và xem ánh xạ**. Chỉ xem trước; chưa tạo lệnh, chưa nhận hàng, chưa đổi tồn kho.
 2. Kiểm tra document ID, ngày nhận, tên xưởng, người kiểm và tổng lượng. Nếu nguồn có `supplier_review_required`, sửa/chọn đúng xưởng. Ứng dụng giữ cả thông tin nguồn và thông tin người dùng đã chọn.
 3. Bảng theo dòng phiếu/bao có bốn cột S/M/L/XL. Mã đối chiếu theo danh mục; màu ưu tiên khớp đúng, quy ước đã lưu, rồi gợi ý duy nhất trong cùng mã. Màu nhiều khả năng phù hợp không tự chọn; người dùng chọn màu đầy đủ. Mã đọc nhầm có thể chọn lại từ danh mục.
-4. Dòng `needs_review=true`, màu gợi ý/thay đổi và hàng chưa có danh mục phải xác nhận đã kiểm tra. Nút **Đã kiểm tra các gợi ý màu** chỉ xác nhận các gợi ý đã có mã/màu hợp lệ, trừ dòng nguồn đánh dấu cần xác minh và dòng giữ chưa đối chiếu. Hai loại đó phải kiểm tra riêng. Metadata có ô xác nhận riêng.
+4. Dòng `needs_review=true`, màu gợi ý/thay đổi và hàng chưa có danh mục phải xác nhận đã kiểm tra. Nút **Đã kiểm tra các gợi ý màu** chỉ áp dụng dòng đang hiển thị có mã/màu hợp lệ, trừ dòng nguồn đánh dấu cần xác minh và dòng giữ chưa đối chiếu. Hai loại đó phải kiểm tra riêng. Metadata có ô xác nhận riêng.
 5. Mã/màu chưa có trên app có thể chọn **Giữ nguyên, chưa đối chiếu**. Giữ thông tin thực nhận, không tự tạo SKU hoặc lệnh giả. Nếu đã có đúng mã/màu nhưng size chưa có SKU, vẫn nhập được theo cơ chế hàng chưa đối chiếu hiện hành.
 6. Bấm **Tạo phiếu JSON để đối soát lệnh**. Tạo phiếu nháp, tự điền Bao → mã/màu → S/M/L/XL, không cần nhập lại số lượng. Từ đây dùng bảng và các nút hiện hành: chỉnh sửa, lưu nháp, **Tự động cộng dồn — xem phân bổ**, chọn lệnh/phần dư, xác nhận hàng chưa đối chiếu và cuối cùng **Xác nhận ghi nhận hàng**.
 7. FIFO chia đúng mã–màu–size/xưởng vào phần còn thiếu của từng lệnh. Phần chưa tìm được lệnh/giao dư cần lựa chọn riêng như nhập thủ công. Không tự cộng tồn kho. Dashboard hàng về tính các biên nhận này một lần, cùng dữ liệu nhập thủ công.
 
 **Quay lại nhập JSON** tự lưu bảng nháp hợp lệ trước khi quay lại danh sách. Phiếu JSON của tôi cho mở lại nháp/phiếu đã xác nhận; phiếu đã ghi chỉ xem. Nút **Tải JSON nguồn** tải nguồn đã kiểm tra schema. Nguồn, quyết định ánh xạ, người nhập, mã chứng từ và tổng nguồn được giữ để đối soát. Nếu sửa số lượng tại bảng nháp làm tổng khác nguồn, giao diện cảnh báo chênh lệch; không viết lại nguồn.
+
+## Màu trạng thái và tìm dòng cần xử lý
+
+- **Xanh**: Khớp danh mục/quy ước đã lưu, hoặc ánh xạ đã kiểm tra. Nếu người dùng đổi màu, nhãn cập nhật ngay theo lựa chọn mới.
+- **Đỏ**: cần chọn mã/màu hoặc lựa chọn không còn khớp danh mục. Đánh dấu đã kiểm tra không thể làm dòng thiếu màu chuyển xanh.
+- **Cam**: gợi ý theo mã/chọn lại màu/nguồn có cờ cần kiểm tra, đang chờ xác nhận. Màu khớp vẫn cam nếu số liệu nguồn chưa được duyệt.
+- **Tím**: chủ động giữ nguyên để nhận chưa đối chiếu lệnh, đã xác nhận dòng. Dòng giữ nguyên chưa kiểm tra vẫn cam.
+
+Nhãn chữ/ký hiệu và nền/viền dòng đi cùng màu. Các nút có số lượng để lọc Tất cả, Đã sẵn sàng, Cần chọn mã/màu, Cần kiểm tra, Chưa đối chiếu; tìm không dấu theo mã, màu, bao hoặc dòng nguồn. Trạng thái cập nhật sau chọn/kiểm tra, dòng có thể rời bộ lọc đang xem khi đã xử lý. Dòng ẩn vẫn giữ đầy đủ trong phiếu và còn được kiểm tra tại backend; lọc không bỏ số lượng hoặc bỏ qua dòng lỗi. Nút kiểm tra gợi ý không xác nhận dòng bị ẩn bởi bộ lọc/tìm kiếm.
 
 ## Định dạng nhận
 

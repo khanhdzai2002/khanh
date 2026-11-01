@@ -68,6 +68,7 @@ import { salesFileSchema } from "../shared/sales-file";
 import { incomingRouter } from "./incoming-goods";
 import { productProfilesRouter } from "./product-profiles";
 import { incomingJsonRouter } from "./incoming-json";
+import { addProductCatalog } from "./product-catalog";
 const PgStore = connectPg(session);
 export function makeApp() {
   const app = express(),
@@ -156,6 +157,18 @@ export function makeApp() {
   app.use("/api/incoming", incomingRouter);
   app.use("/api/incoming-json", incomingJsonRouter);
   app.use("/api/product-profiles", productProfilesRouter);
+  app.post(
+    "/api/product-profiles/catalog",
+    permission("plan"),
+    async (req, res) =>
+      res
+        .status(201)
+        .json(
+          await transaction((db) =>
+            addProductCatalog(db, req.actor!, req.body),
+          ),
+        ),
+  );
   app.get("/api/dashboard", async (_req, res) => res.json(await dashboard()));
   app.get("/api/account", async (req, res) => {
     res.json(await initialAdminStatus(pool, req.actor!.id));

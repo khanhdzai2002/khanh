@@ -7,7 +7,9 @@ import type { z } from "zod";
 import {
   jsonCreateSchema,
   jsonMappingNeedsReview,
+  jsonMappingVisualState,
 } from "../shared/incoming-json";
+import { normalizeLabel } from "../shared/incoming-goods";
 import { IncomingGoods } from "./IncomingGoods";
 type Mapping = z.infer<typeof jsonCreateSchema>["mappings"][number];
 export function AutomaticIncoming({
@@ -32,6 +34,8 @@ export function AutomaticIncoming({
     [error, setError] = useState(""),
     [history, setHistory] = useState<any[]>([]),
     [draftId, setDraftId] = useState<string | null>(null);
+  const [mappingFilter, setMappingFilter] = useState("all"),
+    [mappingSearch, setMappingSearch] = useState("");
   const inFlight = useRef(false),
     writable = can(role, "receive");
   const reload = async () => setHistory(await api("/api/incoming-json"));
@@ -61,6 +65,8 @@ export function AutomaticIncoming({
     void act(async () => {
       const p = await send("/api/incoming-json/preview", { text });
       setPreview(p);
+      setMappingFilter("all");
+      setMappingSearch("");
       setDate(p.source.document.receipt_date);
       setSupplier(p.source.document.supplier);
       setMetadata(false);
@@ -83,6 +89,33 @@ export function AutomaticIncoming({
         return jsonMappingNeedsReview(l, m) && !m.reviewed;
       }).length
     : 0;
+  const mappingRows = preview
+    ? preview.lines.map((line: any) => {
+        const mapping = mappings.find((m) => m.key === line.key)!;
+        return {
+          line,
+          mapping,
+          state: jsonMappingVisualState(line, mapping, preview.variants),
+        };
+      })
+    : [];
+  const inFilter = (r: any, f: string) =>
+    f === "all" ||
+    (f === "review" ? r.state.pendingReview : r.state.kind === f);
+  const visibleRows = mappingRows.filter(
+    (r: any) =>
+      inFilter(r, mappingFilter) &&
+      normalizeLabel(
+        [
+          r.line.sku,
+          r.line.color,
+          r.mapping.sku,
+          r.mapping.color,
+          r.line.bag,
+          String(r.line.sourceRow),
+        ].join(" "),
+      ).includes(normalizeLabel(mappingSearch)),
+  );
   if (draftId)
     return (
       <IncomingGoods
@@ -265,6 +298,10 @@ export function AutomaticIncoming({
                   onClick={() =>
                     setMappings((ms) =>
                       ms.map((m) => {
+                        if (
+                          !visibleRows.some((r: any) => r.mapping.key === m.key)
+                        )
+                          return m;
                         const l = preview.lines.find(
                           (l: any) => l.key === m.key,
                         );
@@ -287,8 +324,42 @@ export function AutomaticIncoming({
                 <span>{unreviewed} dòng cần xác nhận kiểm tra</span>
               </div>
               <p>
-                Dòng nguồn đánh dấu cần xác minh và hàng giữ nguyên chưa đối
-                chiếu phải xác nhận riêng từng dòng.
+                Duyệt gợi ý chỉ áp dụng các dòng đang hiển thị. Dòng nguồn đánh
+                dấu cần xác minh và hàng giữ nguyên chưa đối chiếu phải xác nhận
+                riêng từng dòng.
+              </p>
+              <div className="json-mapping-filters">
+                {[
+                  { id: "all", label: "Tất cả", tone: "plain" },
+                  { id: "ready", label: "Đã sẵn sàng", tone: "green" },
+                  { id: "missing", label: "Cần chọn mã/màu", tone: "red" },
+                  { id: "review", label: "Cần kiểm tra", tone: "amber" },
+                  { id: "unmatched", label: "Chưa đối chiếu", tone: "purple" },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    disabled={busy}
+                    className={
+                      "json-status-filter json-status-filter--" + f.tone
+                    }
+                    aria-pressed={mappingFilter === f.id}
+                    onClick={() => setMappingFilter(f.id)}
+                  >
+                    {f.label} (
+                    {mappingRows.filter((r: any) => inFilter(r, f.id)).length})
+                  </button>
+                ))}
+                <input
+                  aria-label="Tìm dòng ánh xạ JSON"
+                  placeholder="Tìm mã, màu, số bao hoặc dòng…"
+                  value={mappingSearch}
+                  onChange={(e) => setMappingSearch(e.target.value)}
+                />
+              </div>
+              <p>
+                Đang xem {visibleRows.length}/{mappingRows.length} dòng. Màu
+                trạng thái cập nhật theo lựa chọn hiện tại; dòng khớp màu vẫn
+                cần duyệt nếu nguồn có cờ kiểm tra.
               </p>
               <div className="table-scroll json-receipt-mapping">
                 <table>
@@ -305,8 +376,7 @@ export function AutomaticIncoming({
                     </tr>
                   </thead>
                   <tbody>
-                    {preview.lines.map((l: any) => {
-                      const m = mappings.find((r) => r.key === l.key)!;
+                    {visibleRows.map(({ line: l, mapping: m, state }: any) => {
                       const codes = [
                           ...new Set<string>(
                             preview.variants.map((v: any) => v.sku),
@@ -323,7 +393,12 @@ export function AutomaticIncoming({
                           ),
                         ];
                       return (
-                        <tr key={l.key}>
+                        <tr
+                          key={l.key}
+                          className={"json-mapping-row--" + state.tone}
+                          data-mapping-status={state.kind}
+                          data-source-key={l.key}
+                        >
                           <td>
                             Dòng {l.sourceRow}
                             <small>Bao: {l.bag || "Không ghi"}</small>
@@ -377,7 +452,20 @@ export function AutomaticIncoming({
                                 ))}
                               </select>
                             )}
-                            <small>{l.matchSource}</small>
+                            <span
+                              className={
+                                "json-mapping-status json-mapping-status--" +
+                                state.tone
+                              }
+                            >
+                              {state.tone === "green"
+                                ? "✓ "
+                                : state.tone === "red"
+                                  ? "! "
+                                  : "• "}
+                              {state.label}
+                            </span>
+                            <small>{state.detail}</small>
                           </td>
                           {sizes.map((s) => (
                             <td key={s}>{fmt(l.quantities[s])}</td>
@@ -426,6 +514,14 @@ export function AutomaticIncoming({
                         </tr>
                       );
                     })}
+                    {!visibleRows.length && (
+                      <tr>
+                        <td colSpan={9}>
+                          Không có dòng phù hợp bộ lọc. Các dòng ẩn vẫn được giữ
+                          trong phiếu.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>

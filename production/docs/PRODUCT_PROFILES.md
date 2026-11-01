@@ -2,6 +2,17 @@
 
 Mở **Thiết lập sản phẩm** trong menu bên trái. Danh sách lấy mã đã lưu trong danh mục; mỗi mã có một ảnh chung, một loại hàng mặc định và **ảnh riêng cho từng màu**. Một ảnh màu dùng chung cho các size của đúng mã–màu đó. Có tìm mã/tên/màu không dấu, lọc In/Trơn/chưa chọn loại, mã thiếu ảnh chung và màu thiếu ảnh riêng.
 
+## Thêm sản phẩm, màu và SKU ngay tại đây
+
+- **Thêm sản phẩm** ở đầu trang: nhập mã mới, tên (tùy chọn), loại In/Trơn (tùy chọn), các màu mỗi màu một dòng và chọn S/M/L/XL. Lưu tạo mã và các SKU con màu × size cùng một transaction. Mã đã có bị chặn để tránh ghi đè; dùng Thêm SKU con trên mã đó.
+- **Thêm SKU con** trên từng thẻ mã: thêm màu mới, hoặc nhập màu đã có để bổ sung size thiếu. Cửa sổ hiển thị trước số SKU sẽ tạo và số đã có được giữ nguyên.
+- **Thêm size** ở từng màu: tự chọn các size đang thiếu, giữ đúng mã/màu. Đủ cả S/M/L/XL thì nút không cần thao tác nữa.
+- Các size đã có hiển thị thành nhãn con dưới màu. Sau lưu, bộ lọc chuyển về mã vừa thêm và nhóm màu/SKU tự mở để kiểm tra; ảnh chung/ảnh màu tiếp tục thiết lập bằng các nút hiện có.
+
+SKU cũ **không được cập nhật/reset** khi bổ sung: giữ ID, version, tên, tồn, bán, lifecycle, ảnh và mọi chứng từ tham chiếu. SKU mới mặc định Mở bán, tồn null (chưa nhập), inbound/số bán/test0 theo quy tắc SKU hiện hành. Một mã–màu–size đã có được bỏ qua và báo số giữ nguyên. Màu/size trùng trong lựa chọn được loại trùng; tên màu vẫn phân biệt dấu tiếng Việt. Thao tác tạo/append có quyền plan, CSRF, khóa giao dịch, unique constraint và audit. Không cần migration mới hay API key. Sửa loại/tên/ảnh cũ không nằm trong thao tác thêm SKU.
+
+## Thiết lập ảnh và loại hàng
+
 1. Bấm **Thiết lập** tại mã cần sửa, chọn ảnh JPEG/PNG/WebP.
 2. Chọn loại mặc định **In** hoặc **Trơn**; có thể để Chưa thiết lập nếu chưa xác định.
 3. Bấm **Lưu thiết lập sản phẩm**. Gỡ ảnh chỉ có hiệu lực sau khi lưu; đóng cửa sổ không ghi thay đổi. Ảnh gốc tối đa20MB, trình duyệt tối ưu cạnh dài tối đa1.600px thành JPEG tối đa2MB (nền trắng cho ảnh trong suốt); backend giới hạn/kiểm tra định dạng riêng.
