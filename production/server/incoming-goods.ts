@@ -12,22 +12,11 @@ import {
   incomingAllocationSnapshot,
 } from "../shared/incoming-allocation";
 import { loadReceivingReport, receivingCsv } from "./receiving-report";
+import { parseInspectionFiles } from "./inspection-files";
+import { inspectionFilesSchema } from "../shared/inspection-images";
 const hash = (value: string | Buffer) =>
   createHash("sha256").update(value).digest("hex");
-const uploadSchema = z
-  .object({
-    images: z
-      .array(
-        z
-          .object({
-            name: z.string().min(1).max(250),
-            data: z.string().min(8).max(11200000),
-          })
-          .strict(),
-      )
-      .max(4),
-  })
-  .strict();
+const uploadSchema = z.object({ images: inspectionFilesSchema }).strict();
 const saveSchema = z
   .object({
     expectedVersion: z.number().int().positive(),
@@ -48,23 +37,6 @@ const confirmSchema = saveSchema
       .max(200),
   })
   .strict();
-function imageType(bytes: Buffer) {
-  if (bytes.subarray(0, 3).equals(Buffer.from([255, 216, 255])))
-    return "image/jpeg";
-  if (
-    bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-  )
-    return "image/png";
-  if (
-    bytes.toString("ascii", 0, 4) === "RIFF" &&
-    bytes.toString("ascii", 8, 12) === "WEBP"
-  )
-    return "image/webp";
-  throw new AppError(
-    400,
-    "Chỉ nhận ảnh JPEG, PNG hoặc WebP. HEIC/PDF cần chuyển thành ảnh trước.",
-  );
-}
 export async function incomingDraft(
   db: DB,
   actor: Actor,
@@ -93,28 +65,7 @@ function editable(d: any, version: number) {
 }
 export async function createIncoming(db: DB, actor: Actor, raw: unknown) {
   const { images } = uploadSchema.parse(raw);
-  let total = 0;
-  const parsed = images.map((i) => {
-    if (
-      !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
-        i.data,
-      )
-    )
-      throw new AppError(400, "Ảnh mã hóa không hợp lệ");
-    const bytes = Buffer.from(i.data, "base64");
-    total += bytes.length;
-    return {
-      id: randomUUID(),
-      name: i.name,
-      bytes,
-      mime: imageType(bytes),
-      sha: hash(bytes),
-    };
-  });
-  if (total > 8 * 1024 * 1024)
-    throw new AppError(400, "Tổng ảnh của một phiếu tối đa 8 MB");
-  if (new Set(parsed.map((i) => i.sha)).size !== parsed.length)
-    throw new AppError(400, "Ảnh bị trùng trong cùng phiếu");
+  const parsed = parseInspectionFiles(images);
   // Serialize identical image uploads/confirmation to prevent duplicate source receipts.
   for (const sha of parsed.map((i) => i.sha).sort())
     await db.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
@@ -123,7 +74,7 @@ export async function createIncoming(db: DB, actor: Actor, raw: unknown) {
   for (const image of parsed) {
     const duplicate = (
       await db.query(
-        `SELECT d.id FROM incoming_goods_images i JOIN incoming_goods_drafts d ON d.id=i.draft_id WHERE i.sha256=$1 AND d.state='confirmed' LIMIT 1`,
+        `SELECT i.id FROM incoming_goods_images i LEFT JOIN incoming_goods_drafts d ON d.id=i.draft_id WHERE i.sha256=$1 AND (d.state='confirmed' OR i.receipt_id IS NOT NULL) LIMIT 1`,
         [image.sha],
       )
     ).rows[0];
@@ -145,11 +96,16 @@ export async function createIncoming(db: DB, actor: Actor, raw: unknown) {
     "INSERT INTO incoming_goods_drafts(id,actor_id,form) VALUES($1,$2,$3)",
     [id, actor.id, JSON.stringify(form)],
   );
-  for (const i of parsed)
+  for (const i of parsed) {
     await db.query(
       "INSERT INTO incoming_goods_images(id,draft_id,name,mime,sha256,bytes) VALUES($1,$2,$3,$4,$5,$6)",
       [i.id, id, i.name, i.mime, i.sha, i.bytes],
     );
+    await db.query(
+      "INSERT INTO inspection_image_metadata(image_id,uploaded_at,uploaded_by,updated_by) VALUES($1,now(),$2,$2)",
+      [i.id, actor.id],
+    );
+  }
   await audit(db, actor.id, "incoming.create", id, {
     images: parsed.map((i) => ({ id: i.id, sha: i.sha, name: i.name })),
   });
@@ -265,7 +221,7 @@ export async function confirmIncoming(
     if (
       (
         await db.query(
-          "SELECT 1 FROM incoming_goods_images i JOIN incoming_goods_drafts d ON d.id=i.draft_id WHERE i.sha256=$1 AND d.state='confirmed' AND d.id<>$2",
+          "SELECT 1 FROM incoming_goods_images i LEFT JOIN incoming_goods_drafts d ON d.id=i.draft_id WHERE i.sha256=$1 AND ((d.state='confirmed' AND d.id<>$2) OR i.receipt_id IS NOT NULL)",
           [image.sha256, id],
         )
       ).rowCount

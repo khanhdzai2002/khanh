@@ -9,6 +9,7 @@ import {
 import { Field, Notice, fmt, vnDate, type Run } from "./ui";
 import type { Snapshot } from "./App";
 import { ReceivingDashboard } from "./ReceivingDashboard";
+import { InspectionAttachments } from "./InspectionAttachments";
 import { IncomingBagTable, newIncomingLine } from "./IncomingBagTable";
 import { incomingMatrix, withIncomingGroups } from "../shared/incoming-matrix";
 type Preview = {
@@ -443,6 +444,21 @@ export function IncomingGoods({
               )}
             </div>
           )}
+          <InspectionAttachments
+            key={draft.id}
+            target={{ kind: "draft", id: draft.id }}
+            defaultDate={
+              draft.jsonSource?.document?.inspection_date || form.date
+            }
+            disabled={busy}
+            onChanged={(bundle) =>
+              setDraft((current: any) =>
+                current?.id === draft.id
+                  ? { ...current, images: bundle.images }
+                  : current,
+              )
+            }
+          />
           <h2>2. Nhập hàng và chọn cách cộng vào lệnh</h2>
           <p>
             Phiếu {draft.id.slice(0, 8)} ·{" "}

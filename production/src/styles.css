@@ -1894,3 +1894,41 @@ summary {
 .catalog-preview > div { margin-top: 12px; }.catalog-preview b { display: block; overflow-wrap: anywhere; margin-bottom: 6px; }
 .catalog-size-chip { display: inline-block; margin: 3px 5px 0 0; padding: 4px 7px; border-radius: 5px; font-size: 11px; }.catalog-size-chip.new { color: #9a4c18; background: #fff0df; }.catalog-size-chip.existing { color: #166534; background: #e7f7ed; }
 @media(max-width:500px) { .product-profile-main,.product-color-card { flex-wrap: wrap; }.product-profile-main > button:last-child,.product-color-card > button:last-child { margin-left: auto; } }
+
+/* Receipt evidence is appended separately from immutable goods movements. */
+.inspection-attachments { margin: 18px 0; padding: 16px; border: 1px solid #d8e0e8; border-radius: 10px; background: #fafbfc; min-width: 0; }
+.inspection-attachments > p,.inspection-upload p { color: #667085; font-size: 12px; }
+.inspection-upload { background: white; padding: 12px; border-radius: 8px; }
+.inspection-upload summary,.inspection-attached-list summary,.inspection-receipt-group > summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+.inspection-upload fieldset { padding: 12px 0 0; margin: 0; border: 0; min-width: 0; }
+.inspection-attachments input[type=file] { max-width: 100%; }
+.inspection-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(min(100%,300px),1fr)); gap: 16px; margin: 16px 0; align-items: start; }
+.inspection-grid .inspection-card { max-width: 100%; min-width: 0; }
+.inspection-card { border: 1px solid #dce1e8; border-radius: 10px; overflow: hidden; background: white; }
+.inspection-thumbnail { display: block; padding: 0; width: 100%; border: 0; border-radius: 0; background: #edf0f4; height: 180px; }
+.inspection-thumbnail img { width: 100%; height: 100%; object-fit: contain; }
+.inspection-card-body { padding: 14px; overflow-wrap: anywhere; }
+.inspection-card-body > p { font-size: 12px; color: #475467; line-height: 1.7; margin: 8px 0; }
+.inspection-card-body > small { display: block; color: #667085; margin: 8px 0; line-height: 1.6; }
+.inspection-card-date { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.inspection-filename { display: block; font-size: 13px; }
+.inspection-card-body .actions { margin-top: 10px; }
+.inspection-classify { border-top: 1px solid #eaecf0; margin-top: 14px; padding-top: 12px; display: grid; gap: 10px; }
+.inspection-classify textarea { min-height: 70px; }
+.inspection-filters { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,210px),1fr)); gap: 14px; margin-bottom: 14px; }
+.inspection-stats { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 14px; margin: 18px 0; }
+.inspection-stats > div { border: 1px solid #dde2e9; background: white; border-radius: 10px; padding: 18px; }
+.inspection-stats small { display: block; color: #667085; margin-bottom: 10px; }
+.inspection-stats strong { font-size: 25px; color: #172b40; }
+.inspection-months { padding: 12px 0; }
+.inspection-months [aria-pressed=true] { border-color: #f37519; background: #fff3e8; color: #9a4210; }
+.inspection-receipt-group { border: 1px solid #e3e6eb; border-radius: 8px; padding: 8px 12px; margin: 10px 0; }
+.inspection-viewer { width: min(1150px,95vw); max-width: 95vw; max-height: 94vh; border: 0; border-radius: 12px; padding: 16px; }
+.inspection-viewer::backdrop { background: #101828b8; }
+.inspection-viewer header { display: flex; align-items: center; gap: 16px; justify-content: space-between; margin-bottom: 12px; }
+.inspection-viewer h2 { font-size: 16px; overflow-wrap: anywhere; }
+.inspection-viewer p { font-size: 12px; }
+.inspection-viewer-canvas { height: 65vh; background: #e9edf2; overflow: auto; margin-top: 12px; padding: 20px; }
+.inspection-viewer-canvas img { display: block; height: auto; max-width: none; margin: auto; transform-origin: center; }
+@media(max-width:700px) { .inspection-stats { grid-template-columns: repeat(2,minmax(0,1fr)); } .inspection-stats > div { padding: 12px; } .inspection-stats strong { font-size: 20px; } .inspection-attachments { padding: 10px; } .inspection-viewer header { align-items: start; } }
+@media print { .inspection-attachments,.inspection-archive { display: none; } }

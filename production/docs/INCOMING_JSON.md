@@ -69,3 +69,8 @@ Tạo nháp lặp cùng preview/nội dung trả lại cùng draft ID; nội dun
 Migration014 **chỉ tạo bảng mới** `incoming_json_sources` và trigger chống sửa/xóa nguồn. Không UPDATE/DELETE/backfill dữ liệu cũ. Nguồn và quyết định ánh xạ lưu PostgreSQL cùng backup. Không có tác vụ tự nhập file mẫu hoặc seed dữ liệu công ty. Deploy không tự ghi nhận hàng; chỉ thao tác xác nhận của người được phép mới ghi.
 
 Administrator và Warehouse Operator được nhập JSON; ảnh/phiếu/lệnh và module thủ công giữ cơ chế quyền hiện hành. Không cần biến môi trường mới. Railway tự chạy migration qua startup/pre-deploy như cấu hình đang có. Những chứng từ nhập thủ công trước đây không có document_id trong registry mới; nhân viên vẫn cần đối soát để tránh nhập lại chúng qua JSON.
+
+
+## Đính kèm ảnh phiếu kiểm
+
+Sau tạo phiếu JSON, dùng **Ảnh phiếu kiểm đính kèm → Thêm ảnh phiếu kiểm** để lưu ảnh cùng phiếu; có thể thêm sau khi ghi nhận. Ngày kiểm mặc định từ JSON nguồn nếu có, người dùng xác nhận/sửa ngày trên ảnh trước khi tải. Nguồn JSON bất biến, bảng nhập, tổng số nhận và phân bổ không bị sửa khi thêm hoặc phân loại ảnh. Tra cứu ở **Kho ảnh phiếu kiểm**; xem [hướng dẫn chứng từ](INSPECTION_ARCHIVE.md).

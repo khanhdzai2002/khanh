@@ -38,7 +38,7 @@ Nhóm bao/cộng dồn dùng bảng phiếu/ảnh từ migration009 và bảng x
 
 Các biến `INCOMING_OCR_*`, `GEMINI_API_KEY`, `GEMINI_MODEL` trên hosting không còn được module này sử dụng. Có thể gỡ khỏi Variables theo quy trình quản lý khóa của công ty, nhưng không cần cung cấp khóa mới để dùng tính năng. Lark vẫn xác thực danh tính, PostgreSQL vẫn là nguồn dữ liệu tập trung.
 
-Giới hạn hiện tại:100 phiếu gần nhất trong danh sách;4 ảnh/8MB mỗi phiếu; tối đa1.000 dòng bảng/phân bổ và200 lệnh trong một lần xác nhận. Chống trùng ảnh theo bytes SHA-256; hai lần chụp khác nhau cùng chứng từ vẫn cần nhân viên đối soát. Không nhận PDF/HEIC trực tiếp.
+Giới hạn hiện tại:100 phiếu gần nhất trong danh sách nhập;4 ảnh/8MB mỗi lần tải, có thể bổ sung tối đa40 ảnh/80MB mỗi phiếu; tối đa1.000 dòng bảng/phân bổ và200 lệnh trong một lần xác nhận. Kho ảnh có phân trang, tra cứu cả phiếu cũ hơn100 phiếu. Chống trùng ảnh theo bytes SHA-256; hai lần chụp khác nhau cùng chứng từ vẫn cần nhân viên đối soát. Không nhận PDF/HEIC trực tiếp. Xem [Kho ảnh phiếu kiểm](INSPECTION_ARCHIVE.md).
 
 ## Tương thích phiếu cũ và nhóm bao
 

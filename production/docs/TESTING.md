@@ -247,3 +247,10 @@ File JSON người dùng cung cấp được đọc/kiểm tra schema tại work
 Chromium `browser-catalog-mapping-status.py`: tạo6 SKU bằng giao diện → thêm XL thiếu1 → thêm5/bỏ qua7 → SKU cũ giữ nguyên tồn/bán/version → chặn tạo trùng mã → tạo SKU trên mobile → badge xanh/đỏ/cam/tím thực tế → lọc dòng thiếu, chọn màu tự chuyển trạng thái → đổi màu không giữ nhãn match cũ → tìm nguồn dòng3 và duyệt gợi ý chỉ tác động dòng đang xem → lọc kiểm tra/duyệt đến bảng rỗng → trở lại đủ6 dòng và giữ21 sản phẩm/24 ô trong nháp → không tạo lệnh/biên nhận hay đổi stock. Desktop/mobile390px không tràn trang, nhóm màu hiển thị size con và nút thêm theo ngữ cảnh. Build TypeScript/Vite thành công. Chỉ dữ liệu tổng hợp `_test`; không thay dữ liệu Railway thật. Không cần migration hoặc biến môi trường mới.
 
 Hồi quy `browser-incoming-json.py` cũng đạt: nguồn210 → duyệt metadata/mapping → FIFO150/50 +10 chưa đối chiếu → xác nhận một lần → nguồn tải lại, phiếu thủ công/tồn/lệnh cũ giữ đúng → chặn document ID trùng và PRODUCTION_ORDER → mobile và module thủ công vẫn hoạt động.
+
+
+## Kho ảnh phiếu kiểm
+
+`tests/inspection-images.test.ts` kiểm thử append ảnh cho phiếu nháp/đã chốt, nhập JSON, biên nhận trực tiếp, truy vết về phiếu nguồn, retry đồng thời, hạn mức/validation, quyền/CSRF, phân loại có phiên bản và audit, lọc/phân trang/tổng số liệu. Schema giả lập trước migration015 xác minh bytes ảnh, phiếu, biên nhận, lệnh, tồn kho không đổi sau migration và phân loại ảnh cũ.
+
+`tests/browser-inspection-archive.py` chạy sau `tests/serve-smoke.ts` và Vite5175 trên `_test`: ảnh thủ công và JSON, bảo toàn bảng nhập chưa lưu, thêm ảnh sau xác nhận, chống trùng, tải file gốc, sửa phân loại, lọc ngày/tìm kiếm, zoom/xoay, mở đúng lệnh/phiếu nguồn và giao diện390px. Chỉ dùng ảnh/dữ liệu tổng hợp; không chạy vào database thật.

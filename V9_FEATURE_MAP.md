@@ -152,3 +152,8 @@ Menu Thiết lập sản phẩm quản lý ảnh/loại mặc định dùng chun
 Menu Nhập hàng tự động đọc `comsflow.production.import.v1`/WAREHOUSE_RECEIPT, xem trước/duyệt metadata và ánh xạ mã–màu–size rồi tạo nháp theo bao. Dùng lại FIFO/nhận dư/hàng chưa đối chiếu và xác nhận hiện có; không tự tạo lệnh đặt hoặc tăng tồn. Giữ module thủ công. Migration014 chỉ thêm registry nguồn bất biến, chống nhập trùng document_id và lưu quyết định ánh xạ; không chỉnh dữ liệu cũ. [Hướng dẫn JSON](production/docs/INCOMING_JSON.md).
 
 JSON bổ sung nhãn/nền dòng xanh–đỏ–cam–tím theo lựa chọn và kiểm tra hiện tại, kèm bộ lọc đếm/tìm không dấu. Kiểm tra gợi ý chỉ áp dụng dòng đang hiển thị. Thiết lập sản phẩm thêm trực tiếp sản phẩm/màu/SKU S/M/L/XL, nhãn size con và thêm size thiếu; API append chỉ tạo SKU thiếu, không reset dữ liệu hoặc ảnh/chứng từ cũ. Không cần migration mới.
+
+
+### Ảnh phiếu kiểm và kho chứng từ hàng về
+
+Bổ sung ảnh JPEG/PNG/WebP cho phiếu thủ công, JSON và biên nhận trực tiếp, cả sau khi chốt. **Kho ảnh phiếu kiểm** tra cứu tháng/ngày kiểm, nhà xưởng, sản phẩm/màu, mã phiếu/lệnh, loại chứng từ; xem/xoay/zoom/tải ảnh gốc, mở phiếu/lệnh nguồn và sửa phân loại có audit. Migration015 chỉ mở rộng schema; giữ ảnh, nguồn JSON, phiếu, biên nhận, sản lượng và tồn kho cũ. [Chi tiết](production/docs/INSPECTION_ARCHIVE.md).

@@ -17,6 +17,7 @@ import {
   Clock,
   ChevronRight,
   ImageIcon,
+  Images,
 } from "lucide-react";
 import { api, send, setCsrf } from "./api";
 import { fmt, Empty, Notice, ActionFeedback, type Run } from "./ui";
@@ -38,6 +39,7 @@ import { IncomingGoods } from "./IncomingGoods";
 import { AccountsPage } from "./Accounts";
 import { ProductProfiles } from "./ProductProfiles";
 import { AutomaticIncoming } from "./AutomaticIncoming";
+import { InspectionArchive } from "./InspectionArchive";
 import type { ProductProfile } from "../shared/product-profiles";
 export type Snapshot = {
   skus: Variant[];
@@ -52,6 +54,7 @@ const pages = [
   { id: "orders", name: "Gối lệnh sản xuất", icon: Factory },
   { id: "incoming", name: "Nhập liệu hàng về", icon: PackageCheck },
   { id: "incoming-json", name: "Nhập hàng tự động", icon: PackageCheck },
+  { id: "inspection-archive", name: "Kho ảnh phiếu kiểm", icon: Images },
   { id: "history", name: "Lịch sử & giao nhận", icon: History },
   { id: "sales", name: "Phân tích bán hàng", icon: ChartNoAxesCombined },
   { id: "archived", name: "Lệnh đã xóa", icon: Trash2 },
@@ -104,6 +107,9 @@ export default function App() {
     [busy, setBusy] = useState(false),
     [selected, setSelected] = useState<string[]>([]),
     [draftFrom, setDraftFrom] = useState<Variant[]>([]),
+    [openIncomingId, setOpenIncomingId] = useState<string | undefined>(
+      undefined,
+    ),
     [openOrderId, setOpenOrderId] = useState<string | null>(null),
     [development, setDevelopment] = useState(false);
   const refresh = useCallback(async () => {
@@ -405,8 +411,21 @@ export default function App() {
                 clearOpenOrder={() => setOpenOrderId(null)}
               />
             )}
+            {page === "inspection-archive" && (
+              <InspectionArchive
+                onOrder={(id) => {
+                  setOpenOrderId(id);
+                  navigate("history");
+                }}
+                onDraft={(id) => {
+                  setOpenIncomingId(id);
+                  navigate("incoming");
+                }}
+              />
+            )}
             {page === "incoming" && (
               <IncomingGoods
+                initialDraftId={openIncomingId}
                 data={data}
                 role={user.role}
                 run={run}

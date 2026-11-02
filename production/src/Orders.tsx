@@ -11,6 +11,7 @@ import {
   Eye,
 } from "lucide-react";
 import { api, send } from "./api";
+import { InspectionAttachments } from "./InspectionAttachments";
 import {
   sizes,
   isActiveSize,
@@ -1389,7 +1390,8 @@ function OrderDetail({
     ),
     [note, setNote] = useState(""),
     [qty, setQty] = useState<Record<string, number>>({}),
-    [receiptError, setReceiptError] = useState("");
+    [receiptError, setReceiptError] = useState(""),
+    [openedReceiptImages, setOpenedReceiptImages] = useState<string[]>([]);
   const retry = useRef<{ payload: string; key: string } | null>(null);
   const t = totals(order),
     archived = !!order.deletedAt;
@@ -1671,6 +1673,40 @@ function OrderDetail({
         </div>
       ) : (
         history && <p className="muted">Chưa ghi nhận đợt giao nào.</p>
+      )}
+      {!!history?.receipts.length && (
+        <section className="no-print">
+          <h3>Ảnh phiếu kiểm theo đợt nhận</h3>
+          {history.receipts.map((r: any) => (
+            <details
+              key={r.id}
+              className="inspection-receipt-group"
+              onToggle={(e) => {
+                if (e.currentTarget.open)
+                  setOpenedReceiptImages((current) =>
+                    current.includes(r.id) ? current : [...current, r.id],
+                  );
+              }}
+            >
+              <summary>
+                Đợt nhận {String(r.date).slice(0, 10)} · {r.actor} ·{" "}
+                {r.id.slice(0, 8)}
+              </summary>
+              {openedReceiptImages.includes(r.id) && (
+                <InspectionAttachments
+                  target={{ kind: "receipt", id: r.id }}
+                  defaultDate={String(r.date).slice(0, 10)}
+                  disabled={busy}
+                  onChanged={() => {
+                    void api(`/api/orders/${order.id}/history`)
+                      .then(setHistory)
+                      .catch((e) => setHistoryError(e.message));
+                  }}
+                />
+              )}
+            </details>
+          ))}
+        </section>
       )}
       {!!history?.sources?.length && (
         <section className="no-print">

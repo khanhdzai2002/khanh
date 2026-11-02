@@ -66,6 +66,7 @@ import {
 import { bulkOrderStatus } from "./bulk-order-status";
 import { salesFileSchema } from "../shared/sales-file";
 import { incomingRouter } from "./incoming-goods";
+import { inspectionRouter } from "./inspection-images";
 import { productProfilesRouter } from "./product-profiles";
 import { incomingJsonRouter } from "./incoming-json";
 import { addProductCatalog } from "./product-catalog";
@@ -155,6 +156,7 @@ export function makeApp() {
     }),
   );
   app.use("/api/incoming", incomingRouter);
+  app.use("/api/inspection-archive", inspectionRouter);
   app.use("/api/incoming-json", incomingJsonRouter);
   app.use("/api/product-profiles", productProfilesRouter);
   app.post(
@@ -375,7 +377,7 @@ export function makeApp() {
     await loadOrder(pool, id);
     const image = (
       await pool.query(
-        `SELECT i.mime,i.bytes FROM incoming_goods_images i JOIN incoming_goods_drafts d ON d.id=i.draft_id WHERE i.id=$2 AND d.state='confirmed' AND EXISTS (SELECT 1 FROM jsonb_array_elements(d.result->'receipts') r WHERE r->>'orderId'=$1)`,
+        `SELECT i.mime,i.bytes FROM incoming_goods_images i LEFT JOIN incoming_goods_drafts d ON d.id=i.draft_id LEFT JOIN production_receipts pr ON pr.id=i.receipt_id WHERE i.id=$2 AND ((pr.order_id::text=$1) OR (d.state='confirmed' AND EXISTS (SELECT 1 FROM jsonb_array_elements(d.result->'receipts') r WHERE r->>'orderId'=$1)))`,
         [id, z.uuid().parse(req.params.imageId)],
       )
     ).rows[0];
@@ -408,7 +410,7 @@ export function makeApp() {
     ).rows;
     const sources = (
       await pool.query(
-        `SELECT i.id,i.name FROM incoming_goods_images i JOIN incoming_goods_drafts d ON d.id=i.draft_id WHERE d.state='confirmed' AND EXISTS (SELECT 1 FROM jsonb_array_elements(d.result->'receipts') r WHERE r->>'orderId'=$1) ORDER BY i.name,i.id`,
+        `SELECT i.id,i.name FROM incoming_goods_images i LEFT JOIN incoming_goods_drafts d ON d.id=i.draft_id LEFT JOIN production_receipts pr ON pr.id=i.receipt_id WHERE (pr.order_id::text=$1) OR (d.state='confirmed' AND EXISTS (SELECT 1 FROM jsonb_array_elements(d.result->'receipts') r WHERE r->>'orderId'=$1)) ORDER BY i.name,i.id`,
         [id],
       )
     ).rows;
