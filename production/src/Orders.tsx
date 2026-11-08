@@ -974,7 +974,9 @@ function OrderEditor({
                 <th>Ảnh</th>
                 <th>Mã SP</th>
                 <th>Loại hàng</th>
-                <th>Màu</th>
+                <th scope="col" className="order-color-heading">
+                  Màu
+                </th>
                 {sizes.map((s) => (
                   <th
                     key={s}

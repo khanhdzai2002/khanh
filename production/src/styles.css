@@ -894,6 +894,13 @@ td input {
 .order-matrix td input {
   width: 70px;
 }
+.order-matrix .order-color-heading,
+.order-matrix .color-cell {
+  color: #1d2939;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.5;
+}
 .order-size-s {
   --size-ink: #174b88;
   --size-tint: #e8f1ff;
