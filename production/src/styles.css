@@ -894,6 +894,83 @@ td input {
 .order-matrix td input {
   width: 70px;
 }
+.order-size-s {
+  --size-ink: #174b88;
+  --size-tint: #e8f1ff;
+  --size-border: #8eafe0;
+}
+.order-size-m {
+  --size-ink: #176244;
+  --size-tint: #e5f5ed;
+  --size-border: #87c5a8;
+}
+.order-size-l {
+  --size-ink: #805000;
+  --size-tint: #fff2d5;
+  --size-border: #d9b568;
+}
+.order-size-xl {
+  --size-ink: #66339b;
+  --size-tint: #f1e9ff;
+  --size-border: #b9a0d9;
+}
+.order-matrix .order-size-heading {
+  min-width: 112px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--size-ink);
+  background: var(--size-tint);
+  border-bottom: 3px solid var(--size-border);
+}
+.order-matrix .order-size-cell {
+  text-align: center;
+}
+.order-size-inputs .order-size-entry {
+  min-width: 0;
+}
+.order-size-entry label {
+  color: var(--size-ink);
+  font-size: 18px;
+  font-weight: 800;
+}
+.order-matrix .order-size-input,
+.order-size-entry .order-size-input {
+  min-height: 44px;
+  padding: 9px 8px;
+  text-align: center;
+  font-size: 18px;
+  line-height: 1.3;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: #667085;
+  background: #f8fafc;
+}
+.order-matrix .order-size-input {
+  width: 104px;
+}
+.order-matrix .order-size-input.has-quantity,
+.order-size-entry .order-size-input.has-quantity {
+  color: var(--size-ink);
+  background: var(--size-tint);
+  border-color: var(--size-border);
+  font-weight: 800;
+}
+.order-size-input:focus-visible {
+  outline: 2px solid var(--size-ink);
+  outline-offset: 2px;
+}
+.order-matrix .order-size-total {
+  text-align: center;
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.order-matrix .order-size-total.has-quantity {
+  color: var(--size-ink);
+  background: var(--size-tint);
+  box-shadow: inset 0 -3px var(--size-border);
+}
 .order-summary {
   display: flex;
   justify-content: space-between;
@@ -1281,6 +1358,9 @@ summary {
   }
   .size-inputs {
     grid-template-columns: repeat(3, 1fr);
+  }
+  .size-inputs.order-size-inputs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .receipt-form {
     flex-direction: column;

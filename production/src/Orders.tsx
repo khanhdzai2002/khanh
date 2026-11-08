@@ -788,6 +788,7 @@ function OrderEditor({
     return (
       <input
         type="number"
+        className={`order-size-input${(item?.qty || 0) > 0 ? " has-quantity" : ""}`}
         aria-label={`${group.sku} ${group.color} ${size}`}
         min={item ? locked(item) : 0}
         max="1000000"
@@ -975,7 +976,13 @@ function OrderEditor({
                 <th>Loại hàng</th>
                 <th>Màu</th>
                 {sizes.map((s) => (
-                  <th key={s}>{s}</th>
+                  <th
+                    key={s}
+                    scope="col"
+                    className={`order-size-heading order-size-${s.toLowerCase()}`}
+                  >
+                    {s}
+                  </th>
                 ))}
                 <th>Tổng</th>
                 <th>Ưu tiên</th>
@@ -1040,7 +1047,12 @@ function OrderEditor({
                   </td>
                   <td className="color-cell">{g.color}</td>
                   {sizes.map((size) => (
-                    <td key={size}>{sizeCell(g, size)}</td>
+                    <td
+                      key={size}
+                      className={`order-size-cell order-size-${size.toLowerCase()}`}
+                    >
+                      {sizeCell(g, size)}
+                    </td>
                   ))}
                   <td>
                     <b>{fmt(g.items.reduce((n, i) => n + i.qty, 0))}</b>
@@ -1099,15 +1111,19 @@ function OrderEditor({
             <tfoot>
               <tr>
                 <th colSpan={4}>TỔNG CỘNG</th>
-                {sizes.map((size) => (
-                  <th key={size}>
-                    {fmt(
-                      form.items
-                        .filter((i) => variants.get(i.variantId)?.size === size)
-                        .reduce((n, i) => n + i.qty, 0),
-                    )}
-                  </th>
-                ))}
+                {sizes.map((size) => {
+                  const qty = form.items
+                    .filter((i) => variants.get(i.variantId)?.size === size)
+                    .reduce((n, i) => n + i.qty, 0);
+                  return (
+                    <th
+                      key={size}
+                      className={`order-size-total order-size-${size.toLowerCase()}${qty > 0 ? " has-quantity" : ""}`}
+                    >
+                      {fmt(qty)}
+                    </th>
+                  );
+                })}
                 <th>
                   {fmt(
                     form.items
@@ -1283,23 +1299,29 @@ function OrderEditor({
                 )}
               </div>
             )}
-            <div className="size-inputs">
+            <div className="size-inputs order-size-inputs">
               {sizes.map((s) => (
-                <Field key={s} label={s}>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    max="1000000"
-                    value={quantities[s] || 0}
-                    onChange={(e) =>
-                      setQuantities({
-                        ...quantities,
-                        [s]: Number(e.target.value),
-                      })
-                    }
-                  />
-                </Field>
+                <div
+                  key={s}
+                  className={`order-size-entry order-size-${s.toLowerCase()}`}
+                >
+                  <Field label={s}>
+                    <input
+                      type="number"
+                      className={`order-size-input${(quantities[s] || 0) > 0 ? " has-quantity" : ""}`}
+                      min="0"
+                      step="1"
+                      max="1000000"
+                      value={quantities[s] || 0}
+                      onChange={(e) =>
+                        setQuantities({
+                          ...quantities,
+                          [s]: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </Field>
+                </div>
               ))}
             </div>
             <button
