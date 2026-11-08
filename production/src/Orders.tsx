@@ -972,7 +972,9 @@ function OrderEditor({
             <thead>
               <tr>
                 <th>Ảnh</th>
-                <th>Mã SP</th>
+                <th scope="col" className="order-product-heading">
+                  Mã SP
+                </th>
                 <th>Loại hàng</th>
                 <th scope="col" className="order-color-heading">
                   Màu
